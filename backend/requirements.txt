@@ -1,0 +1,5 @@
+Flask
+Flask-Cors
+pymongo[srv]
+python-dotenv
+certifi

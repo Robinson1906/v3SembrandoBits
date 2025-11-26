@@ -188,10 +188,26 @@ def obtener_datos_dispositivo(device_id):
     if medidas_collection is None or sensores_collection is None:
         return jsonify({"error": "Conexión a la base de datos no disponible"}), 503
     try:
-        sensor_name = f"sensor{device_id}"
-        sensor = sensores_collection.find_one({"nombre": sensor_name, "activo": True})
+        # Mapeo de dispositivos a nombres de sensores
+        sensor_name_mapping = {
+            1: ['SB_It001', 'sensor1'],
+            2: ['SB_CA001', 'sensor2'],
+            3: ['sensor3']
+        }
+        
+        possible_names = sensor_name_mapping.get(device_id, [f"sensor{device_id}"])
+        
+        # Buscar el sensor con cualquiera de los nombres posibles
+        sensor = None
+        sensor_name_used = None
+        for name in possible_names:
+            sensor = sensores_collection.find_one({"nombre": name, "activo": True})
+            if sensor:
+                sensor_name_used = name
+                break
+        
         if not sensor:
-            return jsonify({"error": f"Dispositivo {device_id} no encontrado"}), 404
+            return jsonify({"error": f"Dispositivo {device_id} no encontrado. Nombres buscados: {possible_names}"}), 404
 
         sensor_id = sensor['_id']
         campos = sensor.get('campos', [])
@@ -220,7 +236,7 @@ def obtener_datos_dispositivo(device_id):
 
         return jsonify({
             "dispositivo": device_id,
-            "sensor": sensor_name,
+            "sensor": sensor_name_used,
             "datos": datos_dispositivo
         })
     except Exception as e:

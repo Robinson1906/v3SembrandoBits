@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Separator } from "./ui/separator";
-import { ApiTester } from "./ApiTester";
 import { 
   Plus, 
   Edit, 
@@ -22,9 +21,10 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  TestTube2
+  Star
 } from "lucide-react";
 import { toast } from "sonner";
+import { Calificaciones } from "./Calificaciones";
 
 interface Campo {
   campo_id?: number;
@@ -41,10 +41,11 @@ interface Sensor {
 }
 
 interface Medida {
+  _id?: string;
   sensor: string;
   nombre_campo: string;
-  valor: string | number;
-  fecha: string;
+  valor: string | number | boolean;
+  timestamp: string;
 }
 
 export function SensorManagement() {
@@ -59,7 +60,7 @@ export function SensorManagement() {
   const [editando, setEditando] = useState<Sensor | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  const API_BASE_URL = "http://127.0.0.1:5000";
+  const API_BASE_URL = "http://127.0.0.1:8860";
 
   const cargarSensores = async () => {
     try {
@@ -79,7 +80,7 @@ export function SensorManagement() {
 
   const cargarMedidas = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/medidas`);
+      const response = await fetch(`${API_BASE_URL}/medidas?limite=20`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -95,7 +96,7 @@ export function SensorManagement() {
   useEffect(() => {
     cargarSensores();
     cargarMedidas();
-    const intervalo = setInterval(cargarMedidas, 5000); // 5 segundos como en el código original
+    const intervalo = setInterval(cargarMedidas, 10000); // 10 segundos para no sobrecargar
     return () => clearInterval(intervalo);
   }, []);
 
@@ -199,10 +200,10 @@ export function SensorManagement() {
   };
 
   const eliminarSensor = async (sensor_id: number) => {
-    if (!confirm("¿Seguro que deseas desactivar este sensor?")) return;
+    if (!confirm("¿Seguro que deseas eliminar este sensor y todas sus medidas? Esta acción no se puede deshacer.")) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/eliminar_sensor/${sensor_id}`, {
+      const response = await fetch(`${API_BASE_URL}/eliminar_sensor_definitivo/${sensor_id}`, {
         method: "DELETE",
       });
 
@@ -210,22 +211,16 @@ export function SensorManagement() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // El backend puede no devolver JSON, lo manejamos seguro
-      try {
-        const result = await response.json();
-        toast.success(result.mensaje || "Sensor desactivado correctamente");
-      } catch {
-        toast.success("Sensor desactivado correctamente");
-      }
-      
-      cargarSensores(); // Actualizamos la lista
+      const result = await response.json();
+      toast.success(result.mensaje || "Sensor eliminado correctamente");
+      cargarSensores();
     } catch (err) {
       console.error("Error eliminando sensor:", err);
-      toast.error("No se pudo desactivar el sensor. Verifica la conexión con el servidor.");
+      toast.error("No se pudo eliminar el sensor. Verifica la conexión con el servidor.");
     }
   };
 
-  const tiposCampo = ["int", "float", "string", "boolean"];
+  const tiposCampo = ["integer", "float", "string", "boolean"];
 
   return (
     <div className="space-y-6">
@@ -239,13 +234,13 @@ export function SensorManagement() {
             <Activity className="h-4 w-4" />
             Últimas Medidas
           </TabsTrigger>
+          <TabsTrigger value="calificaciones" className="flex items-center gap-2">
+            <Star className="h-4 w-4" />
+            Calificaciones
+          </TabsTrigger>
           <TabsTrigger value="agregar" className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
             Agregar Sensor
-          </TabsTrigger>
-          <TabsTrigger value="pruebas" className="flex items-center gap-2">
-            <TestTube2 className="h-4 w-4" />
-            Pruebas API
           </TabsTrigger>
         </TabsList>
 
@@ -253,79 +248,94 @@ export function SensorManagement() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Lista de Sensores Registrados
+                <Database className="h-5 w-5" />
+                Lista de Sensores ({sensores.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Campos</TableHead>
-                    <TableHead>Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sensores.map((sensor) => (
-                    <TableRow key={sensor.sensor_id}>
-                      <TableCell className="font-medium">{sensor.sensor_id}</TableCell>
-                      <TableCell>{sensor.sensor}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{sensor.tipo_sensor}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {sensor.activo ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-red-500" />
-                          )}
-                          <span>{sensor.activo ? "Activo" : "Inactivo"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          {sensor.campos.map((campo, index) => (
-                            <div key={index} className="text-xs">
-                              <Badge variant="secondary" className="mr-1">
-                                {campo.nombre_campo}
-                              </Badge>
-                              <span className="text-muted-foreground">
-                                ({campo.tipo_campo})
-                              </span>
+              {sensores.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Campos</TableHead>
+                        <TableHead>Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sensores.map((sensor) => (
+                        <TableRow key={sensor.sensor_id}>
+                          <TableCell className="font-medium">{sensor.sensor}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{sensor.tipo_sensor}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {sensor.activo ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-red-500" />
+                              )}
+                              <span className="text-sm">{sensor.activo ? "Activo" : "Inactivo"}</span>
                             </div>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setEditando(sensor);
-                              setIsEditDialogOpen(true);
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => sensor.sensor_id && eliminarSensor(sensor.sensor_id)}
-                          >
-                            <Power className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {sensor.campos.map((campo, index) => (
+                                <Badge key={index} variant="secondary" className="text-xs">
+                                  {campo.nombre_campo} <span className="text-muted-foreground ml-1">({campo.tipo_campo})</span>
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditando(sensor);
+                                  setIsEditDialogOpen(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-orange-500 hover:text-orange-600"
+                                onClick={() => {
+                                  // Aquí podría ir lógica para mostrar más información
+                                  toast.info(`Sensor: ${sensor.sensor} (${sensor.tipo_sensor})`);
+                                }}
+                              >
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => sensor.sensor_id && eliminarSensor(sensor.sensor_id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    No hay sensores registrados. Agrega uno desde la pestaña "Agregar Sensor"
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -335,33 +345,46 @@ export function SensorManagement() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5" />
-                Últimas Medidas Registradas
+                Últimas Medidas ({medidas.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {medidas.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Sensor</TableHead>
-                      <TableHead>Campo</TableHead>
-                      <TableHead>Valor</TableHead>
-                      <TableHead>Fecha</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {medidas.map((medida, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{medida.sensor}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{medida.nombre_campo}</Badge>
-                        </TableCell>
-                        <TableCell className="font-semibold">{medida.valor}</TableCell>
-                        <TableCell className="text-muted-foreground">{medida.fecha}</TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sensor</TableHead>
+                        <TableHead>Campo</TableHead>
+                        <TableHead>Valor</TableHead>
+                        <TableHead>Fecha/Hora</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {medidas.map((medida, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">{medida.sensor}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{medida.nombre_campo}</Badge>
+                          </TableCell>
+                          <TableCell className="font-semibold text-green-600">
+                            {typeof medida.valor === 'boolean' ? (medida.valor ? 'true' : 'false') : medida.valor}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(medida.timestamp).toLocaleString('es-ES', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit'
+                            })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               ) : (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
@@ -372,6 +395,10 @@ export function SensorManagement() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="calificaciones" className="space-y-4">
+          <Calificaciones />
         </TabsContent>
 
         <TabsContent value="agregar" className="space-y-4">
@@ -487,16 +514,14 @@ export function SensorManagement() {
                 ))}
               </div>
 
-              <Button onClick={agregarSensor} className="w-full">
-                <Plus className="h-4 w-4 mr-2" />
-                Guardar Sensor
-              </Button>
+              <div className="flex gap-2 pt-4">
+                <Button onClick={agregarSensor} className="flex-1">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Guardar Sensor
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="pruebas" className="space-y-4">
-          <ApiTester />
         </TabsContent>
       </Tabs>
 

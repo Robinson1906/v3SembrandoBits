@@ -10,6 +10,7 @@ from database import inicializar_base_datos, get_sensores_collection, get_medida
 # Importar Blueprints
 from sensores import sensores_bp
 from medidas import medidas_bp
+from votaciones import votaciones_bp
 
 # --- Configuración Inicial ---
 app = Flask(__name__)
@@ -71,6 +72,7 @@ configurar_base_datos()
 # --- Registro de Blueprints ---
 app.register_blueprint(sensores_bp)
 app.register_blueprint(medidas_bp)
+app.register_blueprint(votaciones_bp)
 
 @app.route("/")
 def home():

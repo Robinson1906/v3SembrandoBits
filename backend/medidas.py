@@ -3,7 +3,7 @@ from bson import ObjectId
 from datetime import datetime
 
 # Importar desde database en lugar de servidor (EVITA CIRCULAR IMPORT)
-from database import get_medidas_collection, get_sensores_collection, log_error
+from database import get_medidas_collection, get_sensores_collection, get_db, log_error
 
 def validar_valor_por_tipo(valor, tipo_campo, nombre_campo):
     """
@@ -56,6 +56,7 @@ medidas_bp = Blueprint('medidas', __name__)
 # Obtener colecciones desde database
 medidas_collection = get_medidas_collection()
 sensores_collection = get_sensores_collection()
+db = get_db()
 
 @medidas_bp.route('/guardar', methods=['POST'])
 def guardar_medidas():
@@ -184,60 +185,83 @@ def obtener_medidas():
 
 @medidas_bp.route('/dispositivo/<int:device_id>', methods=['GET'])
 def obtener_datos_dispositivo(device_id):
-    """Obtiene los últimos valores de sensores para un dispositivo específico (1, 2 o 3)."""
-    if medidas_collection is None or sensores_collection is None:
+    """Obtiene los últimos valores de sensores para un dispositivo lógico (1, 2 o 3).
+
+    El número de dispositivo es una posición lógica que se mapea al
+    dispositivo real en la colección "dispositivos" ordenado por fecha
+    de creación. Luego se agregan los últimos valores de todos los sensores
+    vinculados a ese dispositivo (por campo).
+    """
+    if medidas_collection is None or sensores_collection is None or db is None:
         return jsonify({"error": "Conexión a la base de datos no disponible"}), 503
     try:
-        # Mapeo de dispositivos a nombres de sensores
-        sensor_name_mapping = {
-            1: ['SB_It001', 'sensor1'],
-            2: ['SB_CA001', 'sensor2'],
-            3: ['sensor3']
-        }
-        
-        possible_names = sensor_name_mapping.get(device_id, [f"sensor{device_id}"])
-        
-        # Buscar el sensor con cualquiera de los nombres posibles
-        sensor = None
-        sensor_name_used = None
-        for name in possible_names:
-            sensor = sensores_collection.find_one({"nombre": name, "activo": True})
-            if sensor:
-                sensor_name_used = name
-                break
-        
-        if not sensor:
-            return jsonify({"error": f"Dispositivo {device_id} no encontrado. Nombres buscados: {possible_names}"}), 404
+        dispositivos_collection = db.dispositivos
 
-        sensor_id = sensor['_id']
-        campos = sensor.get('campos', [])
+        # Obtener dispositivos ordenados por fecha de creación (más antiguos primero)
+        dispositivos = list(dispositivos_collection.find().sort("created_at", 1))
+        if not dispositivos or device_id < 1 or device_id > len(dispositivos):
+            return jsonify({"error": f"No existe el dispositivo lógico {device_id}. Total disponibles: {len(dispositivos)}"}), 404
+
+        dispositivo_doc = dispositivos[device_id - 1]
+        dispositivo_mongo_id = dispositivo_doc.get("_id")
+
+        # Buscar todos los sensores vinculados a este dispositivo
+        sensores_vinculados = list(sensores_collection.find({
+            "dispositivo_id": dispositivo_mongo_id,
+            "activo": True
+        }))
+
+        if not sensores_vinculados:
+            return jsonify({
+                "dispositivo": device_id,
+                "dispositivo_mongo_id": str(dispositivo_mongo_id),
+                "dispositivo_nombre": dispositivo_doc.get("nombre"),
+                "datos": {},
+                "sensores": []
+            })
 
         datos_dispositivo = {}
-        for campo in campos:
-            if not campo.get('activo', True):
-                continue
-            campo_id = campo['_id']
-            nombre_campo = campo['nombre_campo']
+        sensores_info = []
 
-            # Obtener la última medida para este campo
-            ultima_medida = medidas_collection.find_one(
-                {"sensor_id": sensor_id, "campo_id": campo_id},
-                sort=[("timestamp", -1)]
-            )
+        for sensor in sensores_vinculados:
+            sensor_id = sensor["_id"]
+            campos = sensor.get("campos", [])
+            sensor_nombre = sensor.get("nombre")
 
-            if ultima_medida:
-                valor = ultima_medida['valor']
-                # Convertir booleanos a string para consistencia
-                if isinstance(valor, bool):
-                    valor = str(valor).lower()
-                datos_dispositivo[nombre_campo] = valor
-            else:
-                datos_dispositivo[nombre_campo] = None
+            sensor_campos = {}
+            for campo in campos:
+                if not campo.get("activo", True):
+                    continue
+                campo_id = campo["_id"]
+                nombre_campo = campo["nombre_campo"]
+
+                ultima_medida = medidas_collection.find_one(
+                    {"sensor_id": sensor_id, "campo_id": campo_id},
+                    sort=[("timestamp", -1)]
+                )
+
+                if ultima_medida:
+                    valor = ultima_medida["valor"]
+                    if isinstance(valor, bool):
+                        valor = str(valor).lower()
+                    sensor_campos[nombre_campo] = valor
+                    datos_dispositivo[nombre_campo] = valor
+                else:
+                    sensor_campos[nombre_campo] = None
+                    datos_dispositivo.setdefault(nombre_campo, None)
+
+            sensores_info.append({
+                "sensor_id": str(sensor_id),
+                "nombre": sensor_nombre,
+                "campos": sensor_campos
+            })
 
         return jsonify({
             "dispositivo": device_id,
-            "sensor": sensor_name_used,
-            "datos": datos_dispositivo
+            "dispositivo_mongo_id": str(dispositivo_mongo_id),
+            "dispositivo_nombre": dispositivo_doc.get("nombre"),
+            "datos": datos_dispositivo,
+            "sensores": sensores_info
         })
     except Exception as e:
         log_error(e, "obtener_datos_dispositivo")

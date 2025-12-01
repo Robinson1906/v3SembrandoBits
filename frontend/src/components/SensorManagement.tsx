@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Separator } from "./ui/separator";
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { 
   Plus, 
   Edit, 
@@ -21,7 +22,9 @@ import {
   AlertCircle,
   CheckCircle,
   XCircle,
-  Star
+  Star,
+  Link,
+  Unlink
 } from "lucide-react";
 import { toast } from "sonner";
 import { Calificaciones } from "./Calificaciones";
@@ -38,6 +41,7 @@ interface Sensor {
   tipo_sensor: string;
   activo: boolean;
   campos: Campo[];
+  dispositivo_id?: string | null;
 }
 
 interface Medida {
@@ -48,9 +52,16 @@ interface Medida {
   timestamp: string;
 }
 
+interface Dispositivo {
+  _id: string;
+  nombre: string;
+  ubicacion?: string;
+}
+
 export function SensorManagement() {
   const [sensores, setSensores] = useState<Sensor[]>([]);
   const [medidas, setMedidas] = useState<Medida[]>([]);
+  const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [nuevo, setNuevo] = useState<Sensor>({
     sensor: "",
     tipo_sensor: "",
@@ -59,24 +70,49 @@ export function SensorManagement() {
   });
   const [editando, setEditando] = useState<Sensor | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [vinculaciones, setVinculaciones] = useState<Record<string, string | null>>({});
+  const [vinculacionesOriginales, setVinculacionesOriginales] = useState<Record<string, string | null>>({});
+  const [isLoading, setIsLoading] = useState(true);
+
 
   const API_BASE_URL = "http://127.0.0.1:8860";
 
-  const cargarSensores = async () => {
+  const cargarDatos = async () => {
+    setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/listar_sensores_campos`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setSensores(data);
+      const [sensoresRes, dispositivosRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/listar_sensores_campos`),
+        fetch(`${API_BASE_URL}/dispositivos`)
+      ]);
+
+      if (!sensoresRes.ok) throw new Error('Error al cargar sensores');
+      if (!dispositivosRes.ok) throw new Error('Error al cargar dispositivos');
+
+      const sensoresData = await sensoresRes.json();
+      const dispositivosData = await dispositivosRes.json();
+
+      setSensores(sensoresData);
+      setDispositivos(dispositivosData);
+
+      const initialVinculaciones = sensoresData.reduce((acc: Record<string, string | null>, sensor: Sensor) => {
+        if (sensor.sensor_id) {
+          acc[sensor.sensor_id] = sensor.dispositivo_id || null;
+        }
+        return acc;
+      }, {});
+      setVinculaciones(initialVinculaciones);
+      setVinculacionesOriginales(initialVinculaciones);
+
     } catch (err) {
-      console.error("Error cargando sensores:", err);
-      toast.error("Error al cargar los sensores. Verifica que el servidor esté funcionando.");
-      // Datos de fallback en caso de error
+      console.error("Error cargando datos iniciales:", err);
+      toast.error("Error al cargar datos. Verifica la conexión con el servidor.");
       setSensores([]);
+      setDispositivos([]);
+    } finally {
+      setIsLoading(false);
     }
   };
+
 
   const cargarMedidas = async () => {
     try {
@@ -94,11 +130,62 @@ export function SensorManagement() {
   };
 
   useEffect(() => {
-    cargarSensores();
+    cargarDatos();
     cargarMedidas();
     const intervalo = setInterval(cargarMedidas, 10000); // 10 segundos para no sobrecargar
     return () => clearInterval(intervalo);
   }, []);
+
+  const handleVinculacionChange = (sensorId: number, dispositivoId: string | null) => {
+    setVinculaciones(prev => ({
+      ...prev,
+      [sensorId]: dispositivoId,
+    }));
+  };
+
+  const guardarVinculaciones = async () => {
+    const cambios = Object.entries(vinculaciones).filter(
+      ([sensorId, dispositivoId]) => vinculacionesOriginales[sensorId] !== dispositivoId
+    );
+
+    if (cambios.length === 0) {
+      toast.info("No hay cambios que guardar.");
+      return;
+    }
+
+    toast.loading("Guardando cambios...");
+
+    const promesas = cambios.map(([sensorId, dispositivoId]) => {
+      const url = dispositivoId
+        ? `${API_BASE_URL}/sensores/${sensorId}/vincular`
+        : `${API_BASE_URL}/sensores/${sensorId}/desvincular`;
+      
+      const body = dispositivoId ? { dispositivo_id: dispositivoId } : {};
+
+      return fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    });
+
+    try {
+      const resultados = await Promise.all(promesas);
+      const errores = resultados.filter(res => !res.ok);
+
+      if (errores.length > 0) {
+        throw new Error(`${errores.length} vinculaciones fallaron.`);
+      }
+
+      toast.dismiss();
+      toast.success("¡Todas las vinculaciones se guardaron correctamente!");
+      cargarDatos(); // Recargar para obtener el estado más reciente
+    } catch (err) {
+      toast.dismiss();
+      toast.error(`Error al guardar las vinculaciones: ${err instanceof Error ? err.message : "Error desconocido"}`);
+      console.error(err);
+    }
+  };
 
   const agregarCampo = () => {
     setNuevo({
@@ -157,7 +244,7 @@ export function SensorManagement() {
         campos: [{ nombre_campo: "", tipo_campo: "" }],
       });
       toast.success(result.mensaje || "Sensor agregado correctamente");
-      cargarSensores();
+      cargarDatos();
     } catch (err) {
       console.error("Error agregando sensor:", err);
       toast.error("Error al agregar el sensor. Verifica la conexión con el servidor.");
@@ -192,7 +279,7 @@ export function SensorManagement() {
       setEditando(null);
       setIsEditDialogOpen(false);
       toast.success(result.mensaje || "Sensor actualizado correctamente");
-      cargarSensores();
+      cargarDatos();
     } catch (err) {
       console.error("Error editando sensor:", err);
       toast.error("Error al actualizar el sensor. Verifica la conexión con el servidor.");
@@ -213,7 +300,7 @@ export function SensorManagement() {
 
       const result = await response.json();
       toast.success(result.mensaje || "Sensor eliminado correctamente");
-      cargarSensores();
+      cargarDatos();
     } catch (err) {
       console.error("Error eliminando sensor:", err);
       toast.error("No se pudo eliminar el sensor. Verifica la conexión con el servidor.");
@@ -225,10 +312,14 @@ export function SensorManagement() {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="lista" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="lista" className="flex items-center gap-2">
             <Database className="h-4 w-4" />
             Lista de Sensores
+          </TabsTrigger>
+          <TabsTrigger value="vincular" className="flex items-center gap-2">
+            <Link className="h-4 w-4" />
+            Vincular Sensores
           </TabsTrigger>
           <TabsTrigger value="medidas" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
@@ -335,6 +426,127 @@ export function SensorManagement() {
                     No hay sensores registrados. Agrega uno desde la pestaña "Agregar Sensor"
                   </AlertDescription>
                 </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="vincular" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Link className="h-5 w-5" />
+                  Vincular Sensores a Dispositivos
+                </div>
+                <Button onClick={guardarVinculaciones}>
+                  Guardar Cambios
+                </Button>
+              </CardTitle>
+               <p className="text-sm text-muted-foreground">
+                Asigna cada sensor a un dispositivo. Solo se permite un dispositivo por sensor.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  Cargando dispositivos y sensores...
+                </div>
+              ) : dispositivos.length === 0 ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    No hay dispositivos registrados para vincular. Agrega un dispositivo primero.
+                  </AlertDescription>
+                </Alert>
+              ) : sensores.length === 0 ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    No hay sensores registrados para vincular.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[200px]">Sensor</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="text-center">Dispositivo asignado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sensores.map((sensor) => {
+                        const vincActual = vinculaciones[sensor.sensor_id!] || null;
+                        const dispositivoActual = dispositivos.find(d => d._id === vincActual || sensor.dispositivo_id === d._id);
+                        const indiceDispositivo = dispositivoActual ? dispositivos.findIndex(d => d._id === dispositivoActual._id) : -1;
+                        const nombreBase = dispositivoActual?.nombre || (indiceDispositivo >= 0 ? `Dispositivo ${indiceDispositivo + 1}` : "");
+
+                        const etiquetaMedio = indiceDispositivo === 3 ? "Aire" : "Tierra";
+                        const nombreDispositivo = nombreBase
+                          ? `${nombreBase} (${etiquetaMedio})`
+                          : etiquetaMedio === "Aire"
+                            ? "Dispositivo Aire"
+                            : "Dispositivo Tierra";
+
+                        return (
+                          <TableRow key={sensor.sensor_id}>
+                            <TableCell className="font-medium">{sensor.sensor}</TableCell>
+                            <TableCell>
+                              <span
+                                className={`inline-flex items-center rounded-full px-3 py-0.5 text-xs font-medium border ${
+                                  vincActual
+                                    ? 'bg-accent text-accent-foreground border-accent'
+                                    : 'bg-muted text-muted-foreground border-muted'
+                                }`}
+                              >
+                                {vincActual
+                                  ? `Conectado a ${nombreDispositivo}`
+                                  : 'No conectado a ningún dispositivo'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Select
+                                value={vincActual || "null"}
+                                onValueChange={(value) =>
+                                  handleVinculacionChange(
+                                    sensor.sensor_id!,
+                                    value === "null" ? null : value
+                                  )
+                                }
+                              >
+                                <SelectTrigger className="w-56 mx-auto">
+                                  <SelectValue placeholder="Selecciona un dispositivo" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="null">Sin vincular</SelectItem>
+                                  {dispositivos.map((dispositivo, index) => {
+                                    let label: string;
+
+                                    if (index === 3) {
+                                      // Cuarto dispositivo: mostrar literalmente "Dispositivo 4 Aire"
+                                      label = dispositivo.nombre || 'Dispositivo 4 Aire';
+                                    } else {
+                                      const base = dispositivo.nombre || `Dispositivo ${index + 1}`;
+                                      label = `${base} Tierra`;
+                                    }
+
+                                    return (
+                                      <SelectItem key={dispositivo._id} value={dispositivo._id}>
+                                        {label}
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -635,6 +847,34 @@ export function SensorManagement() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de Vinculación (YA NO SE USA, SE PUEDE BORRAR) */}
+      {/* <Dialog open={isVinculandoDialogOpen} onOpenChange={setIsVinculandoDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Vincular {vincularSensor?.sensor} a un dispositivo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Selecciona un dispositivo de la lista para vincularlo con este sensor.</p>
+            <Select onValueChange={(value) => {
+              if (vincularSensor?.sensor_id) {
+                guardarVinculacion(vincularSensor.sensor_id, value);
+              }
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar dispositivo" />
+              </SelectTrigger>
+              <SelectContent>
+                {dispositivos.map((dispositivo) => (
+                  <SelectItem key={dispositivo._id} value={dispositivo._id}>
+                    {dispositivo.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </DialogContent>
+      </Dialog> */}
     </div>
   );
 }

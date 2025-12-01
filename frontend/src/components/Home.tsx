@@ -102,19 +102,26 @@ const crops = [
 
 export default function Home() {
   const [selectedMedio, setSelectedMedio] = useState<'terreno' | 'aire' | null>(null);
-  const [selectedDispositivo, setSelectedDispositivo] = useState<1 | 2 | 3 | null>(null);
+  const [selectedDispositivo, setSelectedDispositivo] = useState<1 | 2 | 3 | 4 | null>(null);
   const [selectedCrop, setSelectedCrop] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
   const [airQualityStatus, setAirQualityStatus] = useState<'bueno' | 'moderado' | 'malo'>('bueno');
-  const [sensorData, setSensorData] = useState<Record<1 | 2 | 3, any>>({} as Record<1 | 2 | 3, any>);
-  const [lastSensorData, setLastSensorData] = useState<Record<1 | 2 | 3, any>>({} as Record<1 | 2 | 3, any>);
+  type DeviceId = 1 | 2 | 3 | 4;
+
+  const [sensorData, setSensorData] = useState<Record<DeviceId, any>>({} as Record<DeviceId, any>);
+  const [lastSensorData, setLastSensorData] = useState<Record<DeviceId, any>>({} as Record<DeviceId, any>);
   const [loading, setLoading] = useState(false);
-  const [dataAge, setDataAge] = useState<Record<1 | 2 | 3, Date | null>>({ 1: null, 2: null, 3: null });
+  const [dataAge, setDataAge] = useState<Record<DeviceId, Date | null>>({ 1: null, 2: null, 3: null, 4: null });
 
   const API_BASE_URL = "http://127.0.0.1:8860";
 
+  // Asegurar que al cargar la página principal siempre se muestre desde el inicio
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
   // Función para obtener datos del dispositivo
-  const fetchDeviceData = (deviceId: 1 | 2 | 3) => {
+  const fetchDeviceData = (deviceId: DeviceId) => {
     fetch(`${API_BASE_URL}/dispositivo/${deviceId}`)
       .then(res => {
         if (!res.ok) {
@@ -141,11 +148,11 @@ export default function Home() {
   // Cargar datos de TODOS los dispositivos al inicio para análisis de cultivos
   useEffect(() => {
     // Cargar datos iniciales de todos los dispositivos
-    [1, 2, 3].forEach(id => fetchDeviceData(id as 1 | 2 | 3));
+    ( [1, 2, 3, 4] as DeviceId[]).forEach(id => fetchDeviceData(id));
     
     // Configurar polling cada 30 segundos para todos los dispositivos
     const intervalId = setInterval(() => {
-      [1, 2, 3].forEach(id => fetchDeviceData(id as 1 | 2 | 3));
+      ( [1, 2, 3, 4] as DeviceId[]).forEach(id => fetchDeviceData(id));
     }, 30000);
     
     return () => clearInterval(intervalId);
@@ -421,34 +428,61 @@ export default function Home() {
     };
   };
 
-  // Obtener los campos dinámicamente desde el endpoint /listar_sensores_campos
-  const [camposSensor, setCamposSensor] = useState<Record<1 | 2 | 3, string[]>>({
+  // Obtener los campos dinámicamente usando las vinculaciones dispositivo_id
+  const [camposSensor, setCamposSensor] = useState<Record<DeviceId, string[]>>({
     1: [],
     2: [],
-    3: []
+    3: [],
+    4: []
   });
 
-  // Fetch field names for each sensor
+  // Fetch field names for each logical device (1,2,3) basado en /listar_sensores_campos y /dispositivos
   useEffect(() => {
-    fetch(`${API_BASE_URL}/listar_sensores_campos`)
-      .then(res => res.json())
-      .then(data => {
-        const newCampos: Record<1 | 2 | 3, string[]> = { 1: [], 2: [], 3: [] };
-        
-        data.forEach((sensor: any) => {
-          // Map sensor names to device numbers
-          if (sensor.sensor === 'SB_It001' || sensor.sensor === 'sensor1') {
-            newCampos[1] = sensor.campos.map((c: any) => c.nombre_campo);
-          } else if (sensor.sensor === 'SB_CA001' || sensor.sensor === 'sensor2') {
-            newCampos[2] = sensor.campos.map((c: any) => c.nombre_campo);
-          } else if (sensor.sensor === 'sensor3') {
-            newCampos[3] = sensor.campos.map((c: any) => c.nombre_campo);
+    const cargarCamposPorDispositivo = async () => {
+      try {
+        const [sensoresRes, dispositivosRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/listar_sensores_campos`),
+          fetch(`${API_BASE_URL}/dispositivos`)
+        ]);
+
+        const sensoresData = await sensoresRes.json();
+        const dispositivosData = await dispositivosRes.json();
+
+        // Ordenar dispositivos por created_at para alinear con backend /dispositivo/<id>
+        const dispositivosOrdenados = [...dispositivosData].sort((a: any, b: any) => {
+          const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return da - db;
+        });
+
+        const dispositivoIdPorSlot: Record<DeviceId, string | null> = { 1: null, 2: null, 3: null, 4: null };
+        ( [1, 2, 3, 4] as DeviceId[]).forEach((slot, index) => {
+          if (dispositivosOrdenados[index]) {
+            dispositivoIdPorSlot[slot] = dispositivosOrdenados[index]._id;
           }
         });
-        
-        setCamposSensor(newCampos);
-      })
-      .catch(err => console.error('Error fetching sensor fields:', err));
+
+        const nuevosCampos: Record<DeviceId, string[]> = { 1: [], 2: [], 3: [], 4: [] };
+
+        sensoresData.forEach((sensor: any) => {
+          const dispositivoId = sensor.dispositivo_id;
+          if (!dispositivoId) return;
+
+          ( [1, 2, 3, 4] as DeviceId[]).forEach(slot => {
+            if (dispositivoIdPorSlot[slot] === dispositivoId) {
+              const campos = sensor.campos?.map((c: any) => c.nombre_campo) || [];
+              nuevosCampos[slot] = [...new Set([...(nuevosCampos[slot] || []), ...campos])];
+            }
+          });
+        });
+
+        setCamposSensor(nuevosCampos);
+      } catch (err) {
+        console.error('Error fetching sensor fields by dispositivo:', err);
+      }
+    };
+
+    cargarCamposPorDispositivo();
   }, []);
 
   // Función para obtener icono basado en el nombre del campo
@@ -493,7 +527,148 @@ export default function Home() {
     return 'Medición del sensor';
   };
 
-  // Datos completos de sensores por dispositivo (estructura dinámica)
+  // ----------------- AIRE: TARJETAS DINÁMICAS Y CALIDAD -----------------
+
+  // Construir una vista de sensores de aire a partir del dispositivo seleccionado o de cualquier dispositivo
+  const getAirSensorData = () => {
+    // Para aire, por defecto usar el dispositivo lógico 4 (aire) si tiene datos
+    let dataToUse: any = null;
+
+    if (sensorData[4] && Object.keys(sensorData[4]).length > 0) {
+      dataToUse = sensorData[4];
+    } else if (selectedDispositivo && sensorData[selectedDispositivo]) {
+      dataToUse = sensorData[selectedDispositivo];
+    } else {
+      for (const deviceId of [1, 2, 3] as const) {
+        if (sensorData[deviceId] && Object.keys(sensorData[deviceId]).length > 0) {
+          dataToUse = sensorData[deviceId];
+          break;
+        }
+      }
+    }
+
+    const tarjetas: Array<{
+      id: string;
+      nombre: string;
+      valor: string;
+      descripcion: string;
+      icon: React.ReactNode;
+    }> = [];
+
+    if (!dataToUse) {
+      return tarjetas;
+    }
+
+    // Temperatura del aire
+    const tempAire = findFieldValue(dataToUse, [
+      'temperatura_aire',
+      'temp_aire',
+      'temperatura_ambiente',
+      'temp_ambiente',
+      'airtemp',
+      'temperature_air'
+    ]);
+    if (tempAire !== null) {
+      tarjetas.push({
+        id: 'temp-aire',
+        nombre: 'Temperatura',
+        valor: `${tempAire.toFixed(1)}°C`,
+        descripcion: 'Temperatura del aire medida por el sensor',
+        icon: <span className="text-3xl sm:text-4xl">🌡️</span>
+      });
+    }
+
+    // Humedad relativa
+    const humedadRel = findFieldValue(dataToUse, [
+      'humedad_aire',
+      'humedad_relativa',
+      'hr',
+      'humidity_air',
+      'relative_humidity'
+    ]);
+    if (humedadRel !== null) {
+      tarjetas.push({
+        id: 'hum-aire',
+        nombre: 'Humedad Relativa',
+        valor: `${humedadRel.toFixed(0)}%`,
+        descripcion: 'Cantidad de humedad presente en el aire',
+        icon: <span className="text-3xl sm:text-4xl">💧</span>
+      });
+    }
+
+    // Concentración de gases (CO2 / VOC / genérico)
+    const gases = findFieldValue(dataToUse, [
+      'co2',
+      'co2_ppm',
+      'gases',
+      'air_quality',
+      'voc',
+      'mq135'
+    ]);
+    if (gases !== null) {
+      tarjetas.push({
+        id: 'gases',
+        nombre: 'Concentración de Gases',
+        valor: `${gases.toFixed(0)}ppm`,
+        descripcion: 'Indicador de la concentración de contaminantes en el aire',
+        icon: <span className="text-3xl sm:text-4xl">🏭</span>
+      });
+    }
+
+    return tarjetas;
+  };
+
+  const airCards = getAirSensorData();
+
+  // Calcular calidad de aire básica a partir de los datos reales
+  const calcularCalidadAire = (): 'bueno' | 'moderado' | 'malo' => {
+    if (!airCards.length) return airQualityStatus;
+
+    const tempCard = airCards.find(c => c.id === 'temp-aire');
+    const humCard = airCards.find(c => c.id === 'hum-aire');
+    const gasCard = airCards.find(c => c.id === 'gases');
+
+    const parseNumber = (valor: string) => {
+      const num = parseFloat(valor.replace(/[^0-9.-]/g, ''));
+      return isNaN(num) ? null : num;
+    };
+
+    const t = tempCard ? parseNumber(tempCard.valor) : null;
+    const h = humCard ? parseNumber(humCard.valor) : null;
+    const g = gasCard ? parseNumber(gasCard.valor) : null;
+
+    let score = 0;
+    let checks = 0;
+
+    if (t !== null) {
+      checks++;
+      if (t >= 18 && t <= 30) score += 2; // ideal
+      else if (t >= 10 && t <= 35) score += 1; // aceptable
+    }
+
+    if (h !== null) {
+      checks++;
+      if (h >= 40 && h <= 70) score += 2;
+      else if (h >= 20 && h <= 80) score += 1;
+    }
+
+    if (g !== null) {
+      checks++;
+      if (g <= 800) score += 2; // ppm bajos
+      else if (g <= 1500) score += 1;
+    }
+
+    if (checks === 0) return airQualityStatus;
+
+    const avg = score / checks;
+    if (avg >= 1.7) return 'bueno';
+    if (avg >= 1) return 'moderado';
+    return 'malo';
+  };
+
+  const calidadAireCalculada = calcularCalidadAire();
+
+  // Datos completos de sensores por dispositivo de terreno (1,2,3)
   const dispositivoSensores: Record<1 | 2 | 3, {
     nombre: string;
     sensores: Array<{
@@ -504,7 +679,7 @@ export default function Home() {
     }>;
   }> = {
     1: {
-      nombre: 'Dispositivo 1 (SB_It001)',
+      nombre: 'Dispositivo 1',
       sensores: camposSensor[1].length > 0 
         ? camposSensor[1].map(campo => {
             const realData = sensorData[1];
@@ -547,7 +722,7 @@ export default function Home() {
           ]
     },
     2: {
-      nombre: 'Dispositivo 2 (SB_CA001)',
+      nombre: 'Dispositivo 2',
       sensores: camposSensor[2].length > 0 
         ? camposSensor[2].map(campo => {
             const realData = sensorData[2];
@@ -1088,8 +1263,8 @@ export default function Home() {
                 </Button>
               </div>
 
-              {/* Desplegable de sensores */}
-              {selectedDispositivo && (
+              {/* Desplegable de sensores: solo para dispositivos de terreno (1,2,3) */}
+              {(selectedDispositivo === 1 || selectedDispositivo === 2 || selectedDispositivo === 3) && (
                 <div className="mt-6 sm:mt-8 bg-[#f5f5dc] rounded-lg p-4 sm:p-8">
                   <h3 className="text-center text-lg sm:text-xl mb-4 sm:mb-6">
                     Sensores del {dispositivoSensores[selectedDispositivo].nombre}
@@ -1112,7 +1287,7 @@ export default function Home() {
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                    {dispositivoSensores[selectedDispositivo].sensores.map((sensor, index) => {
+                    {dispositivoSensores[selectedDispositivo].sensores.map((sensor: { nombre: string; valor: string; descripcion: string; icon: React.ReactNode; }, index: number) => {
                       // Verificar si hay datos reales
                       const realData = sensorData[selectedDispositivo];
                       const hasRealData = realData && realData[sensor.nombre] !== undefined && realData[sensor.nombre] !== null;
@@ -1282,93 +1457,92 @@ export default function Home() {
           <h2 className="text-center text-xl sm:text-2xl mb-3 sm:mb-4">
             Análisis de calidad del aire
           </h2>
-          
+
           <p className="text-center italic mb-6 sm:mb-8 text-sm sm:text-base">
             El aire huele a montaña despejada.
           </p>
 
+          {/* Indicador de calidad del aire basado en datos reales */}
           <div className="max-w-3xl mx-auto bg-white rounded-lg p-4 sm:p-8 mb-4 sm:mb-6">
             <div className="flex justify-center gap-4 sm:gap-8 mb-4 sm:mb-6">
-              <button
-                onClick={() => setAirQualityStatus('bueno')}
+              <div
                 className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all ${
-                  airQualityStatus === 'bueno'
+                  calidadAireCalculada === 'bueno'
                     ? 'bg-[#4caf50] ring-4 ring-[#4caf50]/50 scale-110'
                     : 'bg-[#4caf50] opacity-30'
                 }`}
               >
-                <img src={compatible} alt="Good Air Quality" className="w-full h-full object-contain"/>
-              </button>
-              <button
-                onClick={() => setAirQualityStatus('moderado')}
+                <img src={compatible} alt="Aire bueno" className="w-full h-full object-contain" />
+              </div>
+              <div
                 className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all ${
-                  airQualityStatus === 'moderado'
+                  calidadAireCalculada === 'moderado'
                     ? 'bg-[#ffeb3b] ring-4 ring-[#ffeb3b]/50 scale-110'
                     : 'bg-[#ffeb3b] opacity-30'
                 }`}
               >
-                <img src={neutral} alt="Moderate Air Quality" className="w-full h-full object-contain"/>
-              </button>
-              <button
-                onClick={() => setAirQualityStatus('malo')}
+                <img src={neutral} alt="Aire moderado" className="w-full h-full object-contain" />
+              </div>
+              <div
                 className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all ${
-                  airQualityStatus === 'malo'
+                  calidadAireCalculada === 'malo'
                     ? 'bg-[#f44336] ring-4 ring-[#f44336]/50 scale-110'
                     : 'bg-[#f44336] opacity-30'
                 }`}
               >
-                <img src={noCompatible} alt="Poor Air Quality" className="w-full h-full object-contain"/>
-              </button>
+                <img src={noCompatible} alt="Aire malo" className="w-full h-full object-contain" />
+              </div>
             </div>
 
             <p className="text-center mb-3 sm:mb-4 text-sm sm:text-base">
-              Nuestros sensores indican un ambiente con <span className="inline-block px-3 py-1 bg-gray-100 rounded">Aire Limpio</span><br />
-              y óptimo para el desarrollo de tus cultivos.
+              {calidadAireCalculada === 'bueno' && (
+                <>
+                  Nuestros sensores indican un ambiente con{' '}
+                  <span className="inline-block px-3 py-1 bg-gray-100 rounded">Aire limpio</span>
+                  , óptimo para tus cultivos.
+                </>
+              )}
+              {calidadAireCalculada === 'moderado' && (
+                <>
+                  El aire es aceptable, pero{' '}
+                  <span className="inline-block px-3 py-1 bg-yellow-100 rounded">revisa ventilación y humedad</span>.
+                </>
+              )}
+              {calidadAireCalculada === 'malo' && (
+                <>
+                  Nuestros sensores detectan{' '}
+                  <span className="inline-block px-3 py-1 bg-red-100 rounded">condiciones de aire no favorables</span>
+                  . Considera mejorar la ventilación.
+                </>
+              )}
             </p>
 
             <p className="text-center italic text-xs sm:text-sm">
-              "El aire huele a montaña despejada, un aliento puro para tu tierra."
+              "El aire que respira tu cultivo también cuenta para su salud."
             </p>
           </div>
 
           <h3 className="text-center text-lg sm:text-xl mb-6 sm:mb-8">Sensores del Aire</h3>
 
           <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {/* Temperatura */}
-            <div className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
-              <div className="w-12 h-12 mb-3 flex items-center justify-center">
-                <span className="text-3xl sm:text-4xl text-red-500">🌡️</span>
+            {airCards.length > 0 ? (
+              airCards.map(card => (
+                <div key={card.id} className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
+                  <div className="w-12 h-12 mb-3 flex items-center justify-center">
+                    {card.icon}
+                  </div>
+                  <h4 className="mb-3 text-sm sm:text-base">{card.nombre}</h4>
+                  <div className="text-3xl sm:text-4xl text-[#2196f3] mb-4">{card.valor}</div>
+                  <p className="text-xs sm:text-sm text-center">
+                    {card.descripcion}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full text-center text-sm text-gray-600">
+                Aún no hay lecturas de los sensores de aire.
               </div>
-              <h4 className="mb-3 text-sm sm:text-base">Temperatura</h4>
-              <div className="text-3xl sm:text-4xl text-[#2196f3] mb-4">25°C</div>
-              <p className="text-xs sm:text-sm text-center">
-                Temperatura óptima para el crecimiento
-              </p>
-            </div>
-
-            {/* Humedad Relativa */}
-            <div className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
-              <div className="w-12 h-12 mb-3 flex items-center justify-center">
-                <span className="text-3xl sm:text-4xl text-blue-500">💧</span>
-              </div>
-              <h4 className="mb-3 text-sm sm:text-base">Humedad Relativa</h4>
-              <div className="text-3xl sm:text-4xl text-[#2196f3] mb-4">60%</div>
-              <p className="text-xs sm:text-sm text-center">
-                Niveles ideales de humedad
-              </p>
-            </div>
-
-            {/* Concentración de Gases */}
-            <div className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
-              <div className="w-12 h-12 mb-3 flex items-center justify-center">
-                <span className="text-3xl sm:text-4xl text-purple-500">🏭</span>
-              </div>
-              <h4 className="mb-3 text-sm sm:text-base">Concentración de Gases</h4>
-              <div className="text-3xl sm:text-4xl text-[#2196f3] mb-4">15ppm</div>
-              <p className="text-xs sm:text-sm text-center">
-                Aire limpio, baja concentración de contaminantes
-              </p>
-            </div>
+            )}
           </div>
         </section>
       )}

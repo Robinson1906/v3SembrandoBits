@@ -52,6 +52,7 @@ def convertir_sensor_a_json(sensor):
         "sensor": sensor.get('nombre', ''),
         "tipo_sensor": sensor.get('tipo', ''),
         "activo": sensor.get('activo', False),
+        "dispositivo_id": str(sensor.get('dispositivo_id')) if sensor.get('dispositivo_id') else None,
         "created_at": sensor.get('created_at'),
         "updated_at": sensor.get('updated_at'),
         "campos": []

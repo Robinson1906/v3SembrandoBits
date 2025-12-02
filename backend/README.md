@@ -86,7 +86,7 @@ FLASK_DEBUG=0
 #### POST /sensores/agregar_sensor
 Agrega o actualiza un sensor.
 
-**Request Body:**
+**Cuerpo de la petición (JSON):**
 ```json
 {
   "sensor": "Nombre del sensor",
@@ -101,7 +101,7 @@ Agrega o actualiza un sensor.
 }
 ```
 
-**Response:**
+**Respuesta:**
 ```json
 {
   "status": "ok",
@@ -124,7 +124,7 @@ Lista todos los sensores con sus campos.
 #### POST /medidas/guardar
 Guarda medidas de sensores.
 
-**Request Body:**
+**Cuerpo de la petición (JSON):**
 ```json
 {
   "measures": {
@@ -141,12 +141,12 @@ Guarda medidas de sensores.
 #### GET /medidas/medidas
 Obtiene medidas filtradas.
 
-**Parámetros Query:**
-- `limite`: Número máximo de resultados (default: 100)
+**Parámetros de consulta (query):**
+- `limite`: Número máximo de resultados (por defecto: 100)
 - `sensor_id`: Filtrar por sensor
 - `campo_id`: Filtrar por campo
-- `desde`: Fecha desde (ISO format)
-- `hasta`: Fecha hasta (ISO format)
+- `desde`: Fecha desde (formato ISO)
+- `hasta`: Fecha hasta (formato ISO)
 
 #### GET /medidas/estado
 Retorna el estado del sistema.

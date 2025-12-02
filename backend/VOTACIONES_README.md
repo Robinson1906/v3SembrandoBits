@@ -136,6 +136,28 @@ DELETE /votaciones/507f1f77bcf86cd799439011
 }
 ```
 
+### 5. Eliminar Todas las Votaciones
+**DELETE** `/votaciones`
+
+Elimina **todas** las votaciones almacenadas en la colección.
+
+Este endpoint se utiliza desde el panel de administración (pestaña **Calificaciones**) para limpiar datos de prueba o reiniciar el historial de calificaciones.
+
+**Ejemplo:**
+```
+DELETE /votaciones
+```
+
+**Respuesta exitosa (200):**
+```json
+{
+  "mensaje": "Todas las votaciones fueron eliminadas exitosamente",
+  "eliminadas": 42
+}
+```
+
+Si no hay votaciones registradas, el campo `eliminadas` será `0`.
+
 ## Integración con el Frontend
 
 El frontend envía automáticamente la votación cuando el usuario:

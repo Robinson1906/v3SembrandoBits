@@ -215,3 +215,20 @@ def eliminar_votacion(votacion_id):
         return jsonify({
             'error': f'Error al eliminar votación: {str(e)}'
         }), 500
+
+@votaciones_bp.route('/votaciones', methods=['DELETE'])
+def eliminar_todas_las_votaciones():
+    """Eliminar todas las votaciones de la base de datos"""
+    try:
+        votaciones_collection = get_votaciones_collection()
+        resultado = votaciones_collection.delete_many({})
+
+        return jsonify({
+            'mensaje': 'Todas las votaciones fueron eliminadas exitosamente',
+            'eliminadas': resultado.deleted_count
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            'error': f'Error al eliminar todas las votaciones: {str(e)}'
+        }), 500

@@ -31,6 +31,7 @@ export function Calificaciones() {
   const [votaciones, setVotaciones] = useState<Votacion[]>([]);
   const [estadisticas, setEstadisticas] = useState<Estadisticas | null>(null);
   const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const API_BASE_URL = "http://127.0.0.1:8860";
 
@@ -105,6 +106,32 @@ export function Calificaciones() {
 
   const calcularPorcentaje = (cantidad: number, total: number) => {
     return total > 0 ? ((cantidad / total) * 100).toFixed(1) : '0.0';
+  };
+
+  const borrarTodasLasVotaciones = async () => {
+    if (!confirm("¿Seguro que deseas borrar todas las calificaciones? Esta acción no se puede deshacer.")) {
+      return;
+    }
+
+    setClearing(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/votaciones`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      toast.success("Todas las calificaciones han sido borradas");
+      // Recargar datos para reflejar el estado vacío
+      await Promise.all([cargarVotaciones(), cargarEstadisticas()]);
+    } catch (err) {
+      console.error("Error borrando votaciones:", err);
+      toast.error("No se pudieron borrar las calificaciones");
+    } finally {
+      setClearing(false);
+    }
   };
 
   return (
@@ -191,18 +218,28 @@ export function Calificaciones() {
               <Star className="h-5 w-5" />
               Últimas 50 Calificaciones
             </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                cargarVotaciones();
-                cargarEstadisticas();
-              }}
-              disabled={loading}
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  cargarVotaciones();
+                  cargarEstadisticas();
+                }}
+                disabled={loading || clearing}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Actualizar
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={borrarTodasLasVotaciones}
+                disabled={clearing || votaciones.length === 0}
+              >
+                {clearing ? 'Borrando...' : 'Borrar todo'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

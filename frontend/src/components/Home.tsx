@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sprout, Wheat, Droplet, Heart, Cloud, Leaf, Check, Star, Thermometer, Zap, FlaskConical, Activity } from 'lucide-react';
 import { Button } from './ui/button';
+import { Skeleton } from './ui/skeleton';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { toast } from 'sonner';
 import compatible from '/images/emojis/compatible.png';
@@ -111,6 +112,8 @@ export default function Home() {
   const [sensorData, setSensorData] = useState<Record<DeviceId, any>>({} as Record<DeviceId, any>);
   const [lastSensorData, setLastSensorData] = useState<Record<DeviceId, any>>({} as Record<DeviceId, any>);
   const [loading, setLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [dataAge, setDataAge] = useState<Record<DeviceId, Date | null>>({ 1: null, 2: null, 3: null, 4: null });
 
   const API_BASE_URL = "http://127.0.0.1:8860";
@@ -122,6 +125,7 @@ export default function Home() {
 
   // Función para obtener datos del dispositivo
   const fetchDeviceData = (deviceId: DeviceId) => {
+    setIsUpdating(true);
     fetch(`${API_BASE_URL}/dispositivo/${deviceId}`)
       .then(res => {
         if (!res.ok) {
@@ -142,6 +146,10 @@ export default function Home() {
         if (lastSensorData[deviceId]) {
           setSensorData(prev => ({ ...prev, [deviceId]: lastSensorData[deviceId] }));
         }
+      })
+      .finally(() => {
+        setIsInitialLoading(false);
+        setIsUpdating(false);
       });
   };
 
@@ -266,28 +274,45 @@ export default function Home() {
   };
 
   // Función para calcular la compatibilidad del cultivo basada en datos reales
+  // Usa SIEMPRE una vista combinada de todos los dispositivos para que la predicción
+  // sea la misma sin importar si se selecciona el dispositivo 1, 2 o 3.
   const calculateCropCompatibility = (cropId: string) => {
-    // Usar datos del dispositivo seleccionado, o si no hay uno, usar todos los disponibles
-    let dataToUse = null;
-    
-    if (selectedDispositivo && sensorData[selectedDispositivo]) {
-      dataToUse = sensorData[selectedDispositivo];
-    } else {
-      // Si no hay dispositivo seleccionado, usar datos de cualquier dispositivo disponible
-      // Prioridad: 1 > 2 > 3
-      for (const deviceId of [1, 2, 3] as const) {
-        if (sensorData[deviceId] && Object.keys(sensorData[deviceId]).length > 0) {
-          dataToUse = sensorData[deviceId];
-          break;
+    const mergedData: Record<string, number> = {};
+    const fieldCounts: Record<string, number> = {};
+
+    // Combinar lecturas de todos los dispositivos disponibles promediando por campo
+    ( [1, 2, 3, 4] as DeviceId[]).forEach(deviceId => {
+      const data = sensorData[deviceId];
+      if (!data || Object.keys(data).length === 0) return;
+
+      Object.keys(data).forEach(key => {
+        const value = data[key];
+        if (value === undefined || value === null) return;
+
+        const numericValue = typeof value === 'number' ? value : parseFloat(value);
+        if (isNaN(numericValue)) return;
+
+        if (!mergedData[key]) {
+          mergedData[key] = numericValue;
+          fieldCounts[key] = 1;
+        } else {
+          mergedData[key] += numericValue;
+          fieldCounts[key] += 1;
         }
-      }
-    }
-    
-    if (!dataToUse) {
+      });
+    });
+
+    // Si no hay datos combinados, devolver configuración base del cultivo
+    if (Object.keys(mergedData).length === 0) {
       return cropCompatibility[cropId];
     }
 
-    const realData = dataToUse;
+    // Promediar los valores por campo
+    Object.keys(mergedData).forEach(key => {
+      mergedData[key] = mergedData[key] / (fieldCounts[key] || 1);
+    });
+
+    const realData = mergedData;
     const crop = cropCompatibility[cropId];
     let compatible = true;
     let issues: string[] = [];
@@ -1287,25 +1312,38 @@ export default function Home() {
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                    {dispositivoSensores[selectedDispositivo].sensores.map((sensor: { nombre: string; valor: string; descripcion: string; icon: React.ReactNode; }, index: number) => {
-                      // Verificar si hay datos reales
-                      const realData = sensorData[selectedDispositivo];
-                      const hasRealData = realData && realData[sensor.nombre] !== undefined && realData[sensor.nombre] !== null;
+                    {isInitialLoading && (!sensorData[selectedDispositivo] || Object.keys(sensorData[selectedDispositivo] || {}).length === 0)
+                      ? Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
+                            <Skeleton className="w-10 h-10 rounded-full mb-3" />
+                            <Skeleton className="h-4 w-2/3 mb-2" />
+                            <Skeleton className="h-6 w-1/2 mb-2" />
+                            <Skeleton className="h-3 w-full" />
+                          </div>
+                        ))
+                      : dispositivoSensores[selectedDispositivo].sensores.map((sensor: { nombre: string; valor: string; descripcion: string; icon: React.ReactNode; }, index: number) => {
+                          const realData = sensorData[selectedDispositivo];
+                          const hasRealData = realData && realData[sensor.nombre] !== undefined && realData[sensor.nombre] !== null;
 
-                      return (
-                        <div key={index} className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center shadow-sm relative">
-                          {hasRealData && (
-                            <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Datos en tiempo real"></div>
-                          )}
-                          {sensor.icon}
-                          <h4 className="mt-3 mb-2 text-center text-sm sm:text-base">{sensor.nombre}</h4>
-                          <div className="text-2xl sm:text-3xl text-[#7cb342] mb-2 font-semibold">{sensor.valor}</div>
-                          <p className="text-xs text-center text-gray-600">
-                            {sensor.descripcion}
-                          </p>
-                        </div>
-                      );
-                    })}
+                          return (
+                            <div
+                              key={index}
+                              className={`bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center shadow-sm relative transition-opacity duration-200 ${
+                                isUpdating ? 'opacity-60' : 'opacity-100'
+                              }`}
+                            >
+                              {hasRealData && (
+                                <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Datos en tiempo real"></div>
+                              )}
+                              {sensor.icon}
+                              <h4 className="mt-3 mb-2 text-center text-sm sm:text-base">{sensor.nombre}</h4>
+                              <div className="text-2xl sm:text-3xl text-[#7cb342] mb-2 font-semibold">{sensor.valor}</div>
+                              <p className="text-xs text-center text-gray-600">
+                                {sensor.descripcion}
+                              </p>
+                            </div>
+                          );
+                        })}
                   </div>
                 </div>
               )}
@@ -1318,25 +1356,30 @@ export default function Home() {
               Selecciona el cultivo que quieres revisar
             </h2>
             
-            <div className="max-w-5xl mx-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
-              {crops.map((crop) => (
-                <div key={crop.id} className="bg-white rounded-lg p-3 sm:p-4 flex flex-col items-center shadow-sm">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden mb-2 sm:mb-3 bg-gray-100">
-                    <ImageWithFallback
-                      src={crop.image}
-                      alt={crop.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <h3 className="mb-2 sm:mb-3 text-sm sm:text-base">{crop.name}</h3>
-                  <Button 
-                    onClick={() => handleCropSelection(crop.id)}
-                    className="bg-[#9ccc65] hover:bg-[#8bc34a] text-white text-xs px-3 sm:px-4 py-2 min-h-[44px] w-full"
+            <div className="max-w-5xl mx-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
+                {crops.map((crop) => (
+                  <div
+                    key={crop.id}
+                    className="bg-white rounded-lg p-3 sm:p-4 flex flex-col items-center shadow-sm"
                   >
-                    Haz click aquí
-                  </Button>
-                </div>
-              ))}
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden mb-2 sm:mb-3 bg-gray-100">
+                      <ImageWithFallback
+                        src={crop.image}
+                        alt={crop.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <h3 className="mb-2 sm:mb-3 text-sm sm:text-base">{crop.name}</h3>
+                    <Button
+                      onClick={() => handleCropSelection(crop.id)}
+                      className="bg-[#9ccc65] hover:bg-[#8bc34a] text-white text-xs px-3 sm:px-4 py-2 min-h-[44px] w-full"
+                    >
+                      Haz click aquí
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -1409,11 +1452,6 @@ export default function Home() {
                         <div className="inline-flex items-center gap-3 px-6 py-3 bg-[#f44336] rounded-xl border-4 border-[#f44336] shadow-lg">
                           <span className="text-3xl sm:text-4xl text-white tracking-wide">✕ No Compatible</span>
                         </div>
-                      )}
-                      {selectedDispositivo && sensorData[selectedDispositivo] && (
-                        <p className="text-xs mt-3 text-gray-600">
-                          Análisis basado en datos en tiempo real del Dispositivo {selectedDispositivo}
-                        </p>
                       )}
                     </div>
 
@@ -1525,9 +1563,23 @@ export default function Home() {
           <h3 className="text-center text-lg sm:text-xl mb-6 sm:mb-8">Sensores del Aire</h3>
 
           <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {airCards.length > 0 ? (
+            {isInitialLoading && airCards.length === 0 ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
+                  <Skeleton className="w-12 h-12 mb-3 rounded-full" />
+                  <Skeleton className="h-4 w-1/2 mb-3" />
+                  <Skeleton className="h-8 w-2/3 mb-4" />
+                  <Skeleton className="h-3 w-full" />
+                </div>
+              ))
+            ) : airCards.length > 0 ? (
               airCards.map(card => (
-                <div key={card.id} className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
+                <div
+                  key={card.id}
+                  className={`bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center transition-opacity duration-200 ${
+                    isUpdating ? 'opacity-60' : 'opacity-100'
+                  }`}
+                >
                   <div className="w-12 h-12 mb-3 flex items-center justify-center">
                     {card.icon}
                   </div>
@@ -1697,12 +1749,14 @@ export default function Home() {
             Recuerda: la tecnología también florece en tus manos. Cuida tu cultivo, cuida tu tierra.
           </p>
 
-          <Button 
-            onClick={scrollToTop}
-            className="bg-[#7cb342] hover:bg-[#689f38] text-white px-6 sm:px-8 py-2 sm:py-3 text-sm sm:text-base min-h-[44px]"
-          >
-            Volver al inicio
-          </Button>
+          <div className="flex items-center justify-center">
+            <Button 
+              onClick={scrollToTop}
+              className="bg-[#7cb342] hover:bg-[#689f38] text-white px-6 sm:px-8 py-2 sm:py-3 text-sm sm:text-base min-h-[44px]"
+            >
+              Volver al inicio
+            </Button>
+          </div>
         </div>
       </section>
 

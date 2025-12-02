@@ -36,7 +36,7 @@ export function DashboardData() {
     lastUpdate: ""
   });
 
-  const API_BASE_URL = "http://127.0.0.1:5000";
+  const API_BASE_URL = "http://200.91.211.22:8860";
 
   const checkServerConnection = async () => {
     try {
@@ -202,7 +202,7 @@ export function DashboardData() {
                 </>
               ) : (
                 <>
-                  <strong>Servidor Desconectado:</strong> Verifica que el servidor Flask esté ejecutándose en http://127.0.0.1:5000
+                  <strong>Servidor Desconectado:</strong> Verifica que el servidor Flask esté ejecutándose en http://200.91.211.22:8860
                 </>
               )}
             </span>

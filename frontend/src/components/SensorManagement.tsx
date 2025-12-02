@@ -75,7 +75,7 @@ export function SensorManagement() {
   const [isLoading, setIsLoading] = useState(true);
 
 
-  const API_BASE_URL = "http://127.0.0.1:8860";
+  const API_BASE_URL = "http://200.91.211.22:8860";
 
   const cargarDatos = async () => {
     setIsLoading(true);

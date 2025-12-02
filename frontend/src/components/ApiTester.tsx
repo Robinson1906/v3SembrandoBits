@@ -20,7 +20,7 @@ export function ApiTester() {
   const [isLoading, setIsLoading] = useState(false);
   const [serverStatus, setServerStatus] = useState<"checking" | "online" | "offline">("checking");
   
-  const API_BASE_URL = "http://127.0.0.1:5000";
+  const API_BASE_URL = "http://200.91.211.22:8860";
 
   const checkServerStatus = async () => {
     setServerStatus("checking");
@@ -169,7 +169,7 @@ export function ApiTester() {
             <CheckCircle className="h-4 w-4" />
             <AlertDescription>
               <strong>Instrucciones:</strong>
-              <br />• Asegúrate de que el servidor Flask esté ejecutándose en http://127.0.0.1:5000
+              <br />• Asegúrate de que el servidor Flask esté ejecutándose en http://200.91.211.22:8860
               <br />• Usa "Test Home" para verificar la conexión básica
               <br />• "Enviar Medida Test" creará datos de ejemplo si hay sensores configurados
               <br />• Revisa los resultados en el área de texto para diagnóstico

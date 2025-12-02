@@ -116,7 +116,7 @@ export default function Home() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [dataAge, setDataAge] = useState<Record<DeviceId, Date | null>>({ 1: null, 2: null, 3: null, 4: null });
 
-  const API_BASE_URL = "http://127.0.0.1:8860";
+  const API_BASE_URL = "http://200.91.211.22:8860";
 
   // Asegurar que al cargar la página principal siempre se muestre desde el inicio
   useEffect(() => {
@@ -554,24 +554,8 @@ export default function Home() {
 
   // ----------------- AIRE: TARJETAS DINÁMICAS Y CALIDAD -----------------
 
-  // Construir una vista de sensores de aire a partir del dispositivo seleccionado o de cualquier dispositivo
+  // Construir tarjetas dinámicas de sensores de aire del dispositivo 4
   const getAirSensorData = () => {
-    // Para aire, por defecto usar el dispositivo lógico 4 (aire) si tiene datos
-    let dataToUse: any = null;
-
-    if (sensorData[4] && Object.keys(sensorData[4]).length > 0) {
-      dataToUse = sensorData[4];
-    } else if (selectedDispositivo && sensorData[selectedDispositivo]) {
-      dataToUse = sensorData[selectedDispositivo];
-    } else {
-      for (const deviceId of [1, 2, 3] as const) {
-        if (sensorData[deviceId] && Object.keys(sensorData[deviceId]).length > 0) {
-          dataToUse = sensorData[deviceId];
-          break;
-        }
-      }
-    }
-
     const tarjetas: Array<{
       id: string;
       nombre: string;
@@ -580,114 +564,116 @@ export default function Home() {
       icon: React.ReactNode;
     }> = [];
 
-    if (!dataToUse) {
+    // Usar los campos del sensor vinculados al dispositivo 4
+    if (!camposSensor[4] || camposSensor[4].length === 0) {
       return tarjetas;
     }
 
-    // Temperatura del aire
-    const tempAire = findFieldValue(dataToUse, [
-      'temperatura_aire',
-      'temp_aire',
-      'temperatura_ambiente',
-      'temp_ambiente',
-      'airtemp',
-      'temperature_air'
-    ]);
-    if (tempAire !== null) {
-      tarjetas.push({
-        id: 'temp-aire',
-        nombre: 'Temperatura',
-        valor: `${tempAire.toFixed(1)}°C`,
-        descripcion: 'Temperatura del aire medida por el sensor',
-        icon: <span className="text-3xl sm:text-4xl">🌡️</span>
-      });
-    }
+    const dataToUse = sensorData[4];
 
-    // Humedad relativa
-    const humedadRel = findFieldValue(dataToUse, [
-      'humedad_aire',
-      'humedad_relativa',
-      'hr',
-      'humidity_air',
-      'relative_humidity'
-    ]);
-    if (humedadRel !== null) {
-      tarjetas.push({
-        id: 'hum-aire',
-        nombre: 'Humedad Relativa',
-        valor: `${humedadRel.toFixed(0)}%`,
-        descripcion: 'Cantidad de humedad presente en el aire',
-        icon: <span className="text-3xl sm:text-4xl">💧</span>
-      });
-    }
+    // Crear tarjetas dinámicas para cada campo del dispositivo 4
+    camposSensor[4].forEach(campo => {
+      let displayValue = 'Cargando...';
+      let icon: React.ReactNode = <span className="text-3xl sm:text-4xl">📊</span>;
+      let descripcion = getDescriptionForField(campo);
 
-    // Concentración de gases (CO2 / VOC / genérico)
-    const gases = findFieldValue(dataToUse, [
-      'co2',
-      'co2_ppm',
-      'gases',
-      'air_quality',
-      'voc',
-      'mq135'
-    ]);
-    if (gases !== null) {
+      // Si hay datos reales, formatear el valor
+      if (dataToUse && dataToUse[campo] !== undefined && dataToUse[campo] !== null) {
+        const value = dataToUse[campo];
+        const name = campo.toLowerCase();
+
+        // Determinar el icono basado en el nombre del campo
+        if (name.includes('temp') || name.includes('temperatura')) {
+          icon = <span className="text-3xl sm:text-4xl">🌡️</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
+        } else if (name.includes('humedad') || name.includes('humidity') || name.includes('hr')) {
+          icon = <span className="text-3xl sm:text-4xl">💧</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value}%`;
+        } else if (name.includes('gas') || name.includes('co2') || name.includes('voc') || name.includes('mq')) {
+          icon = <span className="text-3xl sm:text-4xl">🏭</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value}ppm`;
+        } else if (name.includes('presion') || name.includes('pressure')) {
+          icon = <span className="text-3xl sm:text-4xl">🌪️</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value} hPa`;
+        } else if (name.includes('luz') || name.includes('light') || name.includes('lux')) {
+          icon = <span className="text-3xl sm:text-4xl">☀️</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} lux`;
+        } else {
+          displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
+        }
+      }
+
       tarjetas.push({
-        id: 'gases',
-        nombre: 'Concentración de Gases',
-        valor: `${gases.toFixed(0)}ppm`,
-        descripcion: 'Indicador de la concentración de contaminantes en el aire',
-        icon: <span className="text-3xl sm:text-4xl">🏭</span>
+        id: campo.toLowerCase().replace(/\s+/g, '-'),
+        nombre: campo,
+        valor: displayValue,
+        descripcion: descripcion,
+        icon: icon
       });
-    }
+    });
 
     return tarjetas;
   };
 
   const airCards = getAirSensorData();
 
-  // Calcular calidad de aire básica a partir de los datos reales
+  // Calcular calidad de aire basada en los datos reales del dispositivo 4
   const calcularCalidadAire = (): 'bueno' | 'moderado' | 'malo' => {
-    if (!airCards.length) return airQualityStatus;
-
-    const tempCard = airCards.find(c => c.id === 'temp-aire');
-    const humCard = airCards.find(c => c.id === 'hum-aire');
-    const gasCard = airCards.find(c => c.id === 'gases');
-
-    const parseNumber = (valor: string) => {
-      const num = parseFloat(valor.replace(/[^0-9.-]/g, ''));
-      return isNaN(num) ? null : num;
-    };
-
-    const t = tempCard ? parseNumber(tempCard.valor) : null;
-    const h = humCard ? parseNumber(humCard.valor) : null;
-    const g = gasCard ? parseNumber(gasCard.valor) : null;
+    const dataToUse = sensorData[4];
+    
+    if (!dataToUse || Object.keys(dataToUse).length === 0) {
+      return 'moderado'; // Por defecto si no hay datos
+    }
 
     let score = 0;
     let checks = 0;
 
-    if (t !== null) {
-      checks++;
-      if (t >= 18 && t <= 30) score += 2; // ideal
-      else if (t >= 10 && t <= 35) score += 1; // aceptable
-    }
+    // Evaluar cada campo del dispositivo 4
+    Object.keys(dataToUse).forEach(campo => {
+      const value = dataToUse[campo];
+      if (value === null || value === undefined) return;
+      
+      const numValue = typeof value === 'number' ? value : parseFloat(value);
+      if (isNaN(numValue)) return;
+      
+      const name = campo.toLowerCase();
 
-    if (h !== null) {
-      checks++;
-      if (h >= 40 && h <= 70) score += 2;
-      else if (h >= 20 && h <= 80) score += 1;
-    }
+      // Temperatura del aire
+      if (name.includes('temp') && !name.includes('suelo')) {
+        checks++;
+        if (numValue >= 18 && numValue <= 30) score += 2; // ideal
+        else if (numValue >= 10 && numValue <= 35) score += 1; // aceptable
+        // else score += 0 (malo)
+      }
 
-    if (g !== null) {
-      checks++;
-      if (g <= 800) score += 2; // ppm bajos
-      else if (g <= 1500) score += 1;
-    }
+      // Humedad relativa
+      if (name.includes('humedad') && !name.includes('suelo')) {
+        checks++;
+        if (numValue >= 40 && numValue <= 70) score += 2; // ideal
+        else if (numValue >= 20 && numValue <= 80) score += 1; // aceptable
+      }
 
-    if (checks === 0) return airQualityStatus;
+      // Gases (CO2, VOC, etc.) - valores más bajos son mejores
+      if (name.includes('gas') || name.includes('co2') || name.includes('voc') || name.includes('mq')) {
+        checks++;
+        if (numValue <= 800) score += 2; // bueno
+        else if (numValue <= 1500) score += 1; // moderado
+        // else score += 0 (malo)
+      }
+
+      // Presión atmosférica (si existe)
+      if (name.includes('presion') || name.includes('pressure')) {
+        checks++;
+        if (numValue >= 1013 && numValue <= 1023) score += 2; // ideal
+        else if (numValue >= 1000 && numValue <= 1030) score += 1; // aceptable
+      }
+    });
+
+    if (checks === 0) return 'moderado'; // Sin datos para evaluar
 
     const avg = score / checks;
-    if (avg >= 1.7) return 'bueno';
-    if (avg >= 1) return 'moderado';
+    if (avg >= 1.5) return 'bueno';
+    if (avg >= 0.8) return 'moderado';
     return 'malo';
   };
 

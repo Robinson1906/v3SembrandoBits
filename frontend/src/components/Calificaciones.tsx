@@ -33,7 +33,7 @@ export function Calificaciones() {
   const [loading, setLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
 
-  const API_BASE_URL = "http://127.0.0.1:8860";
+  const API_BASE_URL = "http://200.91.211.22:8860";
 
   const cargarVotaciones = async () => {
     setLoading(true);

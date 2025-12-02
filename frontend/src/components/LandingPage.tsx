@@ -12,7 +12,11 @@ export default function LandingPage({ onExplore }: LandingPageProps) {
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-2">
-        <Sprout className="w-6 h-6 text-[#7cb342]" />
+        <img
+          src="/images/emojis/Logo SembrandoBits.png"
+          alt="Logo SembrandoBits"
+          className="w-8 h-8 object-contain"
+        />
         <span>Panel de Información</span>
       </header>
 
@@ -33,8 +37,12 @@ export default function LandingPage({ onExplore }: LandingPageProps) {
           <div className="relative h-full flex flex-col items-center justify-center px-6 text-center">
             {/* Logo and Title */}
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-full bg-[#7cb342] flex items-center justify-center">
-                <Sprout className="w-10 h-10 text-white" />
+              <div className="w-16 h-16 flex items-center justify-center">
+                <img
+                  src="/images/emojis/Logo SembrandoBits.png"
+                  alt="Logo SembrandoBits"
+                  className="w-16 h-16 object-contain"
+                />
               </div>
               <div className="text-left">
                 <h1 className="text-4xl mb-0">

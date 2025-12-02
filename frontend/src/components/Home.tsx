@@ -1096,7 +1096,11 @@ export default function Home() {
     <div className="min-h-screen bg-[#f5f5dc]">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center gap-2 sticky top-0 z-50">
-        <Sprout className="w-5 h-5 sm:w-6 sm:h-6 text-[#7cb342]" />
+        <img
+          src="/images/emojis/Logo SembrandoBits.png"
+          alt="Logo SembrandoBits"
+          className="w-6 h-6 sm:w-7 sm:h-7 object-contain"
+        />
         <span className="text-sm sm:text-base">Panel de Información</span>
       </header>
 
@@ -1117,8 +1121,12 @@ export default function Home() {
           <div className="relative h-full flex flex-col items-center justify-center px-4 sm:px-6 text-center">
             {/* Logo and Title */}
             <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#7cb342] flex items-center justify-center">
-                <Sprout className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+              <div className="w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center">
+                <img
+                  src="/images/emojis/Logo SembrandoBits.png"
+                  alt="Logo SembrandoBits"
+                  className="w-12 h-12 sm:w-16 sm:h-16 object-contain"
+                />
               </div>
               <div className="text-center sm:text-left">
                 <h1 className="text-2xl sm:text-4xl mb-0">

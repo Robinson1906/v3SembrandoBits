@@ -143,10 +143,13 @@ export default function Home() {
         return res.json();
       })
       .then(data => {
-        if (data.datos) {
+        if (data.datos && Object.keys(data.datos).length > 0) {
           setSensorData(prev => ({ ...prev, [deviceId]: data.datos }));
           setLastSensorData(prev => ({ ...prev, [deviceId]: data.datos }));
           setDataAge(prev => ({ ...prev, [deviceId]: new Date() }));
+        } else if (lastSensorData[deviceId]) {
+          // Si la respuesta no trae datos nuevos, reutilizar los últimos registrados
+          setSensorData(prev => ({ ...prev, [deviceId]: lastSensorData[deviceId] }));
         }
       })
       .catch(err => {
@@ -269,11 +272,17 @@ export default function Home() {
   };
 
   const calculateCropCompatibility = (cropId: string) => {
-    // Usar solo los datos del dispositivo actualmente seleccionado (solo 1,2,3 afectan cultivos)
-    const deviceIdToUse: DeviceId | null = selectedDispositivo && selectedDispositivo !== 4
-      ? selectedDispositivo
-      : null;
-    const realData = deviceIdToUse ? (sensorData[deviceIdToUse] || {}) : {};
+    // Para cultivos, el dispositivo 1 solo muestra datos.
+    // Si se selecciona el 1, usamos la combinación de datos de los dispositivos 2 y 3.
+    let realData: any = {};
+
+    if (selectedDispositivo === 1) {
+      const data2 = sensorData[2] || {};
+      const data3 = sensorData[3] || {};
+      realData = { ...data2, ...data3 };
+    } else if (selectedDispositivo && selectedDispositivo !== 4) {
+      realData = sensorData[selectedDispositivo] || {};
+    }
 
     // Si no hay datos para ese dispositivo, devolver configuración base del cultivo
     if (!realData || Object.keys(realData).length === 0) {
@@ -550,14 +559,16 @@ export default function Home() {
       return tarjetas;
     }
 
-    // Temperatura del aire
+    // Temperatura del aire (sensor SB_CA001: campo "temperatura")
     const tempAire = findFieldValue(dataToUse, [
       'temperatura_aire',
       'temp_aire',
       'temperatura_ambiente',
       'temp_ambiente',
       'airtemp',
-      'temperature_air'
+      'temperature_air',
+      'temperatura',
+      'temp'
     ]);
     if (tempAire !== null) {
       tarjetas.push({
@@ -569,13 +580,15 @@ export default function Home() {
       });
     }
 
-    // Humedad relativa
+    // Humedad relativa (sensor SB_CA001: campo "humedad")
     const humedadRel = findFieldValue(dataToUse, [
       'humedad_aire',
       'humedad_relativa',
       'hr',
       'humidity_air',
-      'relative_humidity'
+      'relative_humidity',
+      'humedad',
+      'humidity'
     ]);
     if (humedadRel !== null) {
       tarjetas.push({
@@ -587,7 +600,7 @@ export default function Home() {
       });
     }
 
-    // Concentración de gases (CO2 / VOC / genérico)
+    // Concentración de gases (sensor SB_CA001: campo "gases")
     const gases = findFieldValue(dataToUse, [
       'co2',
       'co2_ppm',
@@ -714,6 +727,54 @@ export default function Home() {
 
     return { nombre, sensores };
   }, [selectedDispositivo, camposSensor, sensorData]);
+
+  const dispositivoAire = useMemo(() => {
+    const nombre = 'Dispositivo 4 (Aire)';
+    const campos = camposSensor[4];
+    const realData = sensorData[4];
+
+    if (!campos || campos.length === 0) {
+      return {
+        nombre,
+        sensores: [
+          {
+            nombre: 'Cargando...',
+            valor: '...',
+            descripcion: 'Obteniendo información de sensores de aire',
+            icon: <Activity className="w-10 h-10 text-[#7cb342]" />
+          }
+        ]
+      };
+    }
+
+    const sensores = campos.map(campo => {
+      let displayValue = 'Cargando...';
+
+      if (realData && realData[campo] !== undefined && realData[campo] !== null) {
+        const value = realData[campo];
+        const name = campo.toLowerCase();
+
+        if (name.includes('humedad')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}%`;
+        } else if (name.includes('temp')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
+        } else if (name.includes('gases') || name.includes('co2')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} ppm`;
+        } else {
+          displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
+        }
+      }
+
+      return {
+        nombre: campo,
+        valor: displayValue,
+        descripcion: getDescriptionForField(campo),
+        icon: getIconForField(campo)
+      };
+    });
+
+    return { nombre, sensores };
+  }, [camposSensor, sensorData]);
 
   // Datos de compatibilidad de cultivos
   // Estructura completa de requisitos agronómicos por cultivo (basado en PDF)
@@ -1342,9 +1403,7 @@ export default function Home() {
                     </div>
 
                     <p className="text-center mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600 px-4">
-                      {selectedDispositivo && selectedDispositivo !== 4
-                        ? `Análisis basado en las mediciones del dispositivo ${selectedDispositivo}.`
-                        : 'Selecciona un dispositivo de suelo (1, 2 o 3) para ver el análisis con datos reales de tus sensores.'}
+                      Análisis basado en las mediciones actuales de tus sensores de suelo.
                     </p>
 
                     <p className="text-center mb-6 sm:mb-8 text-base sm:text-lg px-4">
@@ -1452,41 +1511,34 @@ export default function Home() {
             </p>
           </div>
 
-          <h3 className="text-center text-lg sm:text-xl mb-6 sm:mb-8">Sensores del Aire</h3>
+          {/* Cards dinámicas para todos los campos vinculados al dispositivo 4 */}
+          <div className="mt-8 max-w-5xl mx-auto bg-white/60 rounded-lg p-4 sm:p-6">
+            <h4 className="text-center text-base sm:text-lg mb-4 sm:mb-6">
+              Variables medidas por el sensor de aire
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {dispositivoAire.sensores.map((sensor, index) => {
+                const realData = sensorData[4];
+                const hasRealData = realData && realData[sensor.nombre] !== undefined && realData[sensor.nombre] !== null;
 
-          <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {isInitialLoading && airCards.length === 0 ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
-                  <Skeleton className="w-12 h-12 mb-3 rounded-full" />
-                  <Skeleton className="h-4 w-1/2 mb-3" />
-                  <Skeleton className="h-8 w-2/3 mb-4" />
-                  <Skeleton className="h-3 w-full" />
-                </div>
-              ))
-            ) : airCards.length > 0 ? (
-              airCards.map(card => (
-                <div
-                  key={card.id}
-                  className={`bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center transition-opacity duration-200 ${
-                    isUpdatingDevice[4] ? 'opacity-60' : 'opacity-100'
-                  }`}
-                >
-                  <div className="w-12 h-12 mb-3 flex items-center justify-center">
-                    {card.icon}
+                return (
+                  <div
+                    key={index}
+                    className={`bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center shadow-sm relative transition-opacity duration-200 ${
+                      isUpdatingDevice[4] ? 'opacity-60' : 'opacity-100'
+                    }`}
+                  >
+                    {hasRealData && (
+                      <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Datos en tiempo real"></div>
+                    )}
+                    {sensor.icon}
+                    <h5 className="mt-3 mb-2 text-center text-sm sm:text-base">{sensor.nombre}</h5>
+                    <div className="text-2xl sm:text-3xl text-[#2196f3] mb-2 font-semibold">{sensor.valor}</div>
+                    <p className="text-xs text-center text-gray-600">{sensor.descripcion}</p>
                   </div>
-                  <h4 className="mb-3 text-sm sm:text-base">{card.nombre}</h4>
-                  <div className="text-3xl sm:text-4xl text-[#2196f3] mb-4">{card.valor}</div>
-                  <p className="text-xs sm:text-sm text-center">
-                    {card.descripcion}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center text-sm text-gray-600">
-                Aún no hay lecturas de los sensores de aire.
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
         </section>
       )}

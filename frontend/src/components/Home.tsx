@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Sprout, Wheat, Droplet, Heart, Cloud, Leaf, Check, Star, Thermometer, Zap, FlaskConical, Activity } from 'lucide-react';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
@@ -101,19 +101,25 @@ const crops = [
   }
 ];
 
+type DeviceId = 1 | 2 | 3 | 4;
+
+const scrollToId = (id: string, smooth: boolean = true) => {
+  requestAnimationFrame(() => {
+    document.getElementById(id)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+  });
+};
+
 export default function Home() {
   const [selectedMedio, setSelectedMedio] = useState<'terreno' | 'aire' | null>(null);
   const [selectedDispositivo, setSelectedDispositivo] = useState<1 | 2 | 3 | 4 | null>(null);
   const [selectedCrop, setSelectedCrop] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
-  const [airQualityStatus, setAirQualityStatus] = useState<'bueno' | 'moderado' | 'malo'>('bueno');
-  type DeviceId = 1 | 2 | 3 | 4;
 
   const [sensorData, setSensorData] = useState<Record<DeviceId, any>>({} as Record<DeviceId, any>);
   const [lastSensorData, setLastSensorData] = useState<Record<DeviceId, any>>({} as Record<DeviceId, any>);
   const [loading, setLoading] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdatingDevice, setIsUpdatingDevice] = useState<Partial<Record<DeviceId, boolean>>>({});
   const [dataAge, setDataAge] = useState<Record<DeviceId, Date | null>>({ 1: null, 2: null, 3: null, 4: null });
 
   const API_BASE_URL = "http://200.91.211.22:8860";
@@ -121,11 +127,14 @@ export default function Home() {
   // Asegurar que al cargar la página principal siempre se muestre desde el inicio
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    setSelectedMedio(null);
+    setSelectedDispositivo(null);
+    setSelectedCrop(null);
   }, []);
 
   // Función para obtener datos del dispositivo
   const fetchDeviceData = (deviceId: DeviceId) => {
-    setIsUpdating(true);
+    setIsUpdatingDevice(prev => ({ ...prev, [deviceId]: true }));
     fetch(`${API_BASE_URL}/dispositivo/${deviceId}`)
       .then(res => {
         if (!res.ok) {
@@ -134,10 +143,13 @@ export default function Home() {
         return res.json();
       })
       .then(data => {
-        if (data.datos) {
+        if (data.datos && Object.keys(data.datos).length > 0) {
           setSensorData(prev => ({ ...prev, [deviceId]: data.datos }));
           setLastSensorData(prev => ({ ...prev, [deviceId]: data.datos }));
           setDataAge(prev => ({ ...prev, [deviceId]: new Date() }));
+        } else if (lastSensorData[deviceId]) {
+          // Si la respuesta no trae datos nuevos, reutilizar los últimos registrados
+          setSensorData(prev => ({ ...prev, [deviceId]: lastSensorData[deviceId] }));
         }
       })
       .catch(err => {
@@ -149,7 +161,7 @@ export default function Home() {
       })
       .finally(() => {
         setIsInitialLoading(false);
-        setIsUpdating(false);
+        setIsUpdatingDevice(prev => ({ ...prev, [deviceId]: false }));
       });
   };
 
@@ -172,14 +184,6 @@ export default function Home() {
       setLoading(true);
       fetchDeviceData(selectedDispositivo);
       setLoading(false);
-      
-      // Configurar polling cada 10 segundos para actualización automática del dispositivo seleccionado
-      const intervalId = setInterval(() => {
-        fetchDeviceData(selectedDispositivo);
-      }, 10000);
-      
-      // Limpiar el intervalo cuando cambie el dispositivo o se desmonte el componente
-      return () => clearInterval(intervalId);
     }
   }, [selectedDispositivo]);
 
@@ -240,22 +244,16 @@ export default function Home() {
       setSelectedCrop(null);
       
       if (medio === 'aire') {
-        setTimeout(() => {
-          document.getElementById('aire-analisis')?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+        scrollToId('aire-analisis');
       } else {
-        setTimeout(() => {
-          document.getElementById('dispositivo')?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+        scrollToId('dispositivo');
       }
     }
   };
 
   const handleCropSelection = (cropId: string) => {
     setSelectedCrop(cropId);
-    setTimeout(() => {
-      document.getElementById('crop-analysis')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    scrollToId('crop-analysis', false);
   };
 
   // Función para buscar un valor en los datos del sensor por patrones de nombre
@@ -273,53 +271,30 @@ export default function Home() {
     return null;
   };
 
-  // Función para calcular la compatibilidad del cultivo basada en datos reales
-  // Usa SIEMPRE una vista combinada de todos los dispositivos para que la predicción
-  // sea la misma sin importar si se selecciona el dispositivo 1, 2 o 3.
   const calculateCropCompatibility = (cropId: string) => {
-    const mergedData: Record<string, number> = {};
-    const fieldCounts: Record<string, number> = {};
+    // Para cultivos, el dispositivo 1 solo muestra datos.
+    // Si se selecciona el 1, usamos la combinación de datos de los dispositivos 2 y 3.
+    let realData: any = {};
 
-    // Combinar lecturas de todos los dispositivos disponibles promediando por campo
-    ( [1, 2, 3, 4] as DeviceId[]).forEach(deviceId => {
-      const data = sensorData[deviceId];
-      if (!data || Object.keys(data).length === 0) return;
-
-      Object.keys(data).forEach(key => {
-        const value = data[key];
-        if (value === undefined || value === null) return;
-
-        const numericValue = typeof value === 'number' ? value : parseFloat(value);
-        if (isNaN(numericValue)) return;
-
-        if (!mergedData[key]) {
-          mergedData[key] = numericValue;
-          fieldCounts[key] = 1;
-        } else {
-          mergedData[key] += numericValue;
-          fieldCounts[key] += 1;
-        }
-      });
-    });
-
-    // Si no hay datos combinados, devolver configuración base del cultivo
-    if (Object.keys(mergedData).length === 0) {
-      return cropCompatibility[cropId];
+    if (selectedDispositivo === 1) {
+      const data2 = sensorData[2] || {};
+      const data3 = sensorData[3] || {};
+      realData = { ...data2, ...data3 };
+    } else if (selectedDispositivo && selectedDispositivo !== 4) {
+      realData = sensorData[selectedDispositivo] || {};
     }
 
-    // Promediar los valores por campo
-    Object.keys(mergedData).forEach(key => {
-      mergedData[key] = mergedData[key] / (fieldCounts[key] || 1);
-    });
-
-    const realData = mergedData;
+    // Si no hay datos para ese dispositivo, devolver configuración base del cultivo
+    if (!realData || Object.keys(realData).length === 0) {
+      return cropCompatibility[cropId];
+    }
     const crop = cropCompatibility[cropId];
     let compatible = true;
     let issues: string[] = [];
     let totalChecks = 0;
     let passedChecks = 0;
 
-    // Extract numeric values from ranges
+    // Extraer valores numéricos desde rangos tipo "10-20"
     const parseRange = (range: string) => {
       const matches = range.match(/(\d+\.?\d*)-(\d+\.?\d*)/);
       if (matches) {
@@ -569,40 +544,53 @@ export default function Home() {
       return tarjetas;
     }
 
-    const dataToUse = sensorData[4];
+    // Temperatura del aire
+    const tempAire = findFieldValue(dataToUse, [
+      'temperatura_aire',
+      'temp_aire',
+      'temperatura_ambiente',
+      'temp_ambiente',
+      'airtemp',
+      'temperature_air'
+    ]);
+    if (tempAire !== null) {
+      tarjetas.push({
+        id: 'temp-aire',
+        nombre: 'Temperatura',
+        valor: `${tempAire.toFixed(1)}°C`,
+        descripcion: 'Temperatura del aire medida por el sensor',
+        icon: <span className="text-3xl sm:text-4xl">🌡️</span>
+      });
+    }
 
-    // Crear tarjetas dinámicas para cada campo del dispositivo 4
-    camposSensor[4].forEach(campo => {
-      let displayValue = 'Cargando...';
-      let icon: React.ReactNode = <span className="text-3xl sm:text-4xl">📊</span>;
-      let descripcion = getDescriptionForField(campo);
+    // Humedad relativa
+    const humedadRel = findFieldValue(dataToUse, [
+      'humedad_aire',
+      'humedad_relativa',
+      'hr',
+      'humidity_air',
+      'relative_humidity'
+    ]);
+    if (humedadRel !== null) {
+      tarjetas.push({
+        id: 'hum-aire',
+        nombre: 'Humedad Relativa',
+        valor: `${humedadRel.toFixed(0)}%`,
+        descripcion: 'Cantidad de humedad presente en el aire',
+        icon: <span className="text-3xl sm:text-4xl">💧</span>
+      });
+    }
 
-      // Si hay datos reales, formatear el valor
-      if (dataToUse && dataToUse[campo] !== undefined && dataToUse[campo] !== null) {
-        const value = dataToUse[campo];
-        const name = campo.toLowerCase();
-
-        // Determinar el icono basado en el nombre del campo
-        if (name.includes('temp') || name.includes('temperatura')) {
-          icon = <span className="text-3xl sm:text-4xl">🌡️</span>;
-          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
-        } else if (name.includes('humedad') || name.includes('humidity') || name.includes('hr')) {
-          icon = <span className="text-3xl sm:text-4xl">💧</span>;
-          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value}%`;
-        } else if (name.includes('gas') || name.includes('co2') || name.includes('voc') || name.includes('mq')) {
-          icon = <span className="text-3xl sm:text-4xl">🏭</span>;
-          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value}ppm`;
-        } else if (name.includes('presion') || name.includes('pressure')) {
-          icon = <span className="text-3xl sm:text-4xl">🌪️</span>;
-          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value} hPa`;
-        } else if (name.includes('luz') || name.includes('light') || name.includes('lux')) {
-          icon = <span className="text-3xl sm:text-4xl">☀️</span>;
-          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} lux`;
-        } else {
-          displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
-        }
-      }
-
+    // Concentración de gases (CO2 / VOC / genérico)
+    const gases = findFieldValue(dataToUse, [
+      'co2',
+      'co2_ppm',
+      'gases',
+      'air_quality',
+      'voc',
+      'mq135'
+    ]);
+    if (gases !== null) {
       tarjetas.push({
         id: campo.toLowerCase().replace(/\s+/g, '-'),
         nombre: campo,
@@ -615,15 +603,24 @@ export default function Home() {
     return tarjetas;
   };
 
-  const airCards = getAirSensorData();
+  const airCards = useMemo(() => getAirSensorData(), [sensorData, selectedDispositivo]);
 
   // Calcular calidad de aire basada en los datos reales del dispositivo 4
   const calcularCalidadAire = (): 'bueno' | 'moderado' | 'malo' => {
-    const dataToUse = sensorData[4];
-    
-    if (!dataToUse || Object.keys(dataToUse).length === 0) {
-      return 'moderado'; // Por defecto si no hay datos
-    }
+    if (!airCards.length) return airQualityStatus;
+
+    const tempCard = airCards.find(c => c.id === 'temp-aire');
+    const humCard = airCards.find(c => c.id === 'hum-aire');
+    const gasCard = airCards.find(c => c.id === 'gases');
+
+    const parseNumber = (valor: string) => {
+      const num = parseFloat(valor.replace(/[^0-9.-]/g, ''));
+      return isNaN(num) ? null : num;
+    };
+
+    const t = tempCard ? parseNumber(tempCard.valor) : null;
+    const h = humCard ? parseNumber(humCard.valor) : null;
+    const g = gasCard ? parseNumber(gasCard.valor) : null;
 
     let score = 0;
     let checks = 0;
@@ -669,7 +666,7 @@ export default function Home() {
       }
     });
 
-    if (checks === 0) return 'moderado'; // Sin datos para evaluar
+    if (checks === 0) return airQualityStatus;
 
     const avg = score / checks;
     if (avg >= 1.5) return 'bueno';
@@ -679,146 +676,109 @@ export default function Home() {
 
   const calidadAireCalculada = calcularCalidadAire();
 
-  // Datos completos de sensores por dispositivo de terreno (1,2,3)
-  const dispositivoSensores: Record<1 | 2 | 3, {
-    nombre: string;
-    sensores: Array<{
-      nombre: string;
-      valor: string;
-      descripcion: string;
-      icon: React.ReactNode;
-    }>;
-  }> = {
-    1: {
-      nombre: 'Dispositivo 1',
-      sensores: camposSensor[1].length > 0 
-        ? camposSensor[1].map(campo => {
-            const realData = sensorData[1];
-            let displayValue = 'Cargando...';
-            
-            // Si hay datos reales, formatear el valor
-            if (realData && realData[campo] !== undefined && realData[campo] !== null) {
-              const value = realData[campo];
-              const name = campo.toLowerCase();
-              
-              if (name.includes('humedad') || name.includes('humidity') || name.includes('hum')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}%`;
-              } else if (name.includes('ph')) {
-                displayValue = typeof value === 'number' ? value.toFixed(1) : value.toString();
-              } else if (name.includes('temp') || name.includes('temperatura')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
-              } else if (name.includes('conductividad') || name.includes('ec') || name.includes('electric')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value} dS/m`;
-              } else if (name.includes('nitro') || name.includes('fosf') || name.includes('potas') || name === 'n' || name === 'p' || name === 'k') {
-                displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} ppm`;
-              } else {
-                displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
-              }
-            }
-            
-            return {
-              nombre: campo,
-              valor: displayValue,
-              descripcion: getDescriptionForField(campo),
-              icon: getIconForField(campo)
-            };
-          })
-        : [
-            {
-              nombre: 'Cargando...',
-              valor: '...',
-              descripcion: 'Obteniendo información de sensores',
-              icon: <Activity className="w-10 h-10 text-[#7cb342]" />
-            }
-          ]
-    },
-    2: {
-      nombre: 'Dispositivo 2',
-      sensores: camposSensor[2].length > 0 
-        ? camposSensor[2].map(campo => {
-            const realData = sensorData[2];
-            let displayValue = 'Cargando...';
-            
-            // Si hay datos reales, formatear el valor
-            if (realData && realData[campo] !== undefined && realData[campo] !== null) {
-              const value = realData[campo];
-              const name = campo.toLowerCase();
-              
-              if (name.includes('humedad') || name.includes('humidity') || name.includes('hum')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}%`;
-              } else if (name.includes('ph')) {
-                displayValue = typeof value === 'number' ? value.toFixed(1) : value.toString();
-              } else if (name.includes('temp') || name.includes('temperatura')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
-              } else if (name.includes('conductividad') || name.includes('ec') || name.includes('electric')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value} dS/m`;
-              } else if (name.includes('nitro') || name.includes('fosf') || name.includes('potas') || name === 'n' || name === 'p' || name === 'k') {
-                displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} ppm`;
-              } else {
-                displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
-              }
-            }
-            
-            return {
-              nombre: campo,
-              valor: displayValue,
-              descripcion: getDescriptionForField(campo),
-              icon: getIconForField(campo)
-            };
-          })
-        : [
-            {
-              nombre: 'Cargando...',
-              valor: '...',
-              descripcion: 'Obteniendo información de sensores',
-              icon: <Activity className="w-10 h-10 text-[#7cb342]" />
-            }
-          ]
-    },
-    3: {
-      nombre: 'Dispositivo 3',
-      sensores: camposSensor[3].length > 0 
-        ? camposSensor[3].map(campo => {
-            const realData = sensorData[3];
-            let displayValue = 'Cargando...';
-            
-            // Si hay datos reales, formatear el valor
-            if (realData && realData[campo] !== undefined && realData[campo] !== null) {
-              const value = realData[campo];
-              const name = campo.toLowerCase();
-              
-              if (name.includes('humedad') || name.includes('humidity') || name.includes('hum')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}%`;
-              } else if (name.includes('ph')) {
-                displayValue = typeof value === 'number' ? value.toFixed(1) : value.toString();
-              } else if (name.includes('temp') || name.includes('temperatura')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
-              } else if (name.includes('conductividad') || name.includes('ec') || name.includes('electric')) {
-                displayValue = `${typeof value === 'number' ? value.toFixed(1) : value} dS/m`;
-              } else if (name.includes('nitro') || name.includes('fosf') || name.includes('potas') || name === 'n' || name === 'p' || name === 'k') {
-                displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} ppm`;
-              } else {
-                displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
-              }
-            }
-            
-            return {
-              nombre: campo,
-              valor: displayValue,
-              descripcion: getDescriptionForField(campo),
-              icon: getIconForField(campo)
-            };
-          })
-        : [
-            {
-              nombre: 'Cargando...',
-              valor: '...',
-              descripcion: 'Obteniendo información de sensores',
-              icon: <Activity className="w-10 h-10 text-[#7cb342]" />
-            }
-          ]
+  const dispositivoSeleccionado = useMemo(() => {
+    if (selectedDispositivo !== 1 && selectedDispositivo !== 2 && selectedDispositivo !== 3) {
+      return null;
     }
-  };
+
+    const nombre = `Dispositivo ${selectedDispositivo}`;
+    const campos = camposSensor[selectedDispositivo];
+    const realData = sensorData[selectedDispositivo];
+
+    if (!campos || campos.length === 0) {
+      return {
+        nombre,
+        sensores: [
+          {
+            nombre: 'Cargando...',
+            valor: '...',
+            descripcion: 'Obteniendo información de sensores',
+            icon: <Activity className="w-10 h-10 text-[#7cb342]" />
+          }
+        ]
+      };
+    }
+
+    const sensores = campos.map(campo => {
+      let displayValue = 'Cargando...';
+
+      if (realData && realData[campo] !== undefined && realData[campo] !== null) {
+        const value = realData[campo];
+        const name = campo.toLowerCase();
+
+        if (name.includes('humedad') || name.includes('humidity') || name.includes('hum')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}%`;
+        } else if (name.includes('ph')) {
+          displayValue = typeof value === 'number' ? value.toFixed(1) : value.toString();
+        } else if (name.includes('temp') || name.includes('temperatura')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
+        } else if (name.includes('conductividad') || name.includes('ec') || name.includes('electric')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value} dS/m`;
+        } else if (name.includes('nitro') || name.includes('fosf') || name.includes('potas') || name === 'n' || name === 'p' || name === 'k') {
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} ppm`;
+        } else {
+          displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
+        }
+      }
+
+      return {
+        nombre: campo,
+        valor: displayValue,
+        descripcion: getDescriptionForField(campo),
+        icon: getIconForField(campo)
+      };
+    });
+
+    return { nombre, sensores };
+  }, [selectedDispositivo, camposSensor, sensorData]);
+
+  const dispositivoAire = useMemo(() => {
+    const nombre = 'Dispositivo 4 (Aire)';
+    const campos = camposSensor[4];
+    const realData = sensorData[4];
+
+    if (!campos || campos.length === 0) {
+      return {
+        nombre,
+        sensores: [
+          {
+            nombre: 'Cargando...',
+            valor: '...',
+            descripcion: 'Obteniendo información de sensores de aire',
+            icon: <Activity className="w-10 h-10 text-[#7cb342]" />
+          }
+        ]
+      };
+    }
+
+    const sensores = campos.map(campo => {
+      let displayValue = 'Cargando...';
+
+      if (realData && realData[campo] !== undefined && realData[campo] !== null) {
+        const value = realData[campo];
+        const name = campo.toLowerCase();
+
+        if (name.includes('humedad')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}%`;
+        } else if (name.includes('temp')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
+        } else if (name.includes('gases') || name.includes('co2')) {
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} ppm`;
+        } else {
+          displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
+        }
+      }
+
+      return {
+        nombre: campo,
+        valor: displayValue,
+        descripcion: getDescriptionForField(campo),
+        icon: getIconForField(campo)
+      };
+    });
+
+    return { nombre, sensores };
+  }, [camposSensor, sensorData]);
 
   // Datos de compatibilidad de cultivos
   // Estructura completa de requisitos agronómicos por cultivo (basado en PDF)
@@ -1283,10 +1243,10 @@ export default function Home() {
               </div>
 
               {/* Desplegable de sensores: solo para dispositivos de terreno (1,2,3) */}
-              {(selectedDispositivo === 1 || selectedDispositivo === 2 || selectedDispositivo === 3) && (
+              {(selectedDispositivo === 1 || selectedDispositivo === 2 || selectedDispositivo === 3) && dispositivoSeleccionado && (
                 <div className="mt-6 sm:mt-8 bg-[#f5f5dc] rounded-lg p-4 sm:p-8">
                   <h3 className="text-center text-lg sm:text-xl mb-4 sm:mb-6">
-                    Sensores del {dispositivoSensores[selectedDispositivo].nombre}
+                    Sensores del {dispositivoSeleccionado.nombre}
                   </h3>
 
                   {loading && (
@@ -1315,7 +1275,7 @@ export default function Home() {
                             <Skeleton className="h-3 w-full" />
                           </div>
                         ))
-                      : dispositivoSensores[selectedDispositivo].sensores.map((sensor: { nombre: string; valor: string; descripcion: string; icon: React.ReactNode; }, index: number) => {
+                      : dispositivoSeleccionado.sensores.map((sensor: { nombre: string; valor: string; descripcion: string; icon: React.ReactNode; }, index: number) => {
                           const realData = sensorData[selectedDispositivo];
                           const hasRealData = realData && realData[sensor.nombre] !== undefined && realData[sensor.nombre] !== null;
 
@@ -1323,7 +1283,7 @@ export default function Home() {
                             <div
                               key={index}
                               className={`bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center shadow-sm relative transition-opacity duration-200 ${
-                                isUpdating ? 'opacity-60' : 'opacity-100'
+                                isUpdatingDevice[selectedDispositivo] ? 'opacity-60' : 'opacity-100'
                               }`}
                             >
                               {hasRealData && (
@@ -1392,7 +1352,6 @@ export default function Home() {
                     {/* Iconos de estado - PLACEHOLDER para logosímbolos de Sembrando Bits */}
                     <div className="flex justify-center gap-4 sm:gap-8 mb-6">
                       <button
-                        onClick={() => setAirQualityStatus('bueno')}
                         className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center transition-all ${
                           cropAnalysis.status === 'compatible'
                             ? 'bg-[#4caf50] ring-4 ring-[#4caf50]/50 scale-110'
@@ -1404,7 +1363,6 @@ export default function Home() {
                         <img src={compatible} alt="Compatible" className="w-full h-full object-contain"/>
                       </button>
                       <button
-                        onClick={() => setAirQualityStatus('moderado')}
                         className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center transition-all ${
                           cropAnalysis.status === 'revisar'
                             ? 'bg-[#ffeb3b] ring-4 ring-[#ffeb3b]/50 scale-110'
@@ -1416,7 +1374,6 @@ export default function Home() {
                         <img src={neutral} alt="Neutral" className="w-full h-full object-contain"/>
                       </button>
                       <button
-                        onClick={() => setAirQualityStatus('malo')}
                         className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center transition-all ${
                           cropAnalysis.status === 'no-compatible'
                             ? 'bg-[#f44336] ring-4 ring-[#f44336]/50 scale-110'
@@ -1448,6 +1405,10 @@ export default function Home() {
                         </div>
                       )}
                     </div>
+
+                    <p className="text-center mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600 px-4">
+                      Análisis basado en las mediciones actuales de tus sensores de suelo.
+                    </p>
 
                     <p className="text-center mb-6 sm:mb-8 text-base sm:text-lg px-4">
                       {cropAnalysis.recommendation}
@@ -1554,41 +1515,34 @@ export default function Home() {
             </p>
           </div>
 
-          <h3 className="text-center text-lg sm:text-xl mb-6 sm:mb-8">Sensores del Aire</h3>
+          {/* Cards dinámicas para todos los campos vinculados al dispositivo 4 */}
+          <div className="mt-8 max-w-5xl mx-auto bg-white/60 rounded-lg p-4 sm:p-6">
+            <h4 className="text-center text-base sm:text-lg mb-4 sm:mb-6">
+              Variables medidas por el sensor de aire
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {dispositivoAire.sensores.map((sensor, index) => {
+                const realData = sensorData[4];
+                const hasRealData = realData && realData[sensor.nombre] !== undefined && realData[sensor.nombre] !== null;
 
-          <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {isInitialLoading && airCards.length === 0 ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
-                  <Skeleton className="w-12 h-12 mb-3 rounded-full" />
-                  <Skeleton className="h-4 w-1/2 mb-3" />
-                  <Skeleton className="h-8 w-2/3 mb-4" />
-                  <Skeleton className="h-3 w-full" />
-                </div>
-              ))
-            ) : airCards.length > 0 ? (
-              airCards.map(card => (
-                <div
-                  key={card.id}
-                  className={`bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center transition-opacity duration-200 ${
-                    isUpdating ? 'opacity-60' : 'opacity-100'
-                  }`}
-                >
-                  <div className="w-12 h-12 mb-3 flex items-center justify-center">
-                    {card.icon}
+                return (
+                  <div
+                    key={index}
+                    className={`bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center shadow-sm relative transition-opacity duration-200 ${
+                      isUpdatingDevice[4] ? 'opacity-60' : 'opacity-100'
+                    }`}
+                  >
+                    {hasRealData && (
+                      <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Datos en tiempo real"></div>
+                    )}
+                    {sensor.icon}
+                    <h5 className="mt-3 mb-2 text-center text-sm sm:text-base">{sensor.nombre}</h5>
+                    <div className="text-2xl sm:text-3xl text-[#2196f3] mb-2 font-semibold">{sensor.valor}</div>
+                    <p className="text-xs text-center text-gray-600">{sensor.descripcion}</p>
                   </div>
-                  <h4 className="mb-3 text-sm sm:text-base">{card.nombre}</h4>
-                  <div className="text-3xl sm:text-4xl text-[#2196f3] mb-4">{card.valor}</div>
-                  <p className="text-xs sm:text-sm text-center">
-                    {card.descripcion}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <div className="col-span-full text-center text-sm text-gray-600">
-                Aún no hay lecturas de los sensores de aire.
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
         </section>
       )}

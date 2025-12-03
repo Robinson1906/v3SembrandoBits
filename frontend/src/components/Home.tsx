@@ -226,9 +226,12 @@ export default function Home() {
       }
     }
 
-    // Resetear el rating después de enviarlo
+    // Resetear estados para dejar la vista como recién cargada
     setRating(0);
-    
+    setSelectedMedio(null);
+    setSelectedDispositivo(null);
+    setSelectedCrop(null);
+
     // Volver al inicio
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -256,6 +259,12 @@ export default function Home() {
   };
 
   const handleCropSelection = (cropId: string) => {
+    // Solo permitir selección de cultivo si hay un dispositivo de suelo seleccionado (1 o 2)
+    if (selectedDispositivo !== 1 && selectedDispositivo !== 2) {
+      toast.error('Primero selecciona el dispositivo 1 o 2 para analizar el cultivo.');
+      return;
+    }
+
     setSelectedCrop(cropId);
     scrollToId('crop-analysis', false);
   };
@@ -276,15 +285,11 @@ export default function Home() {
   };
 
   const calculateCropCompatibility = (cropId: string) => {
-    // Para cultivos, AireSmart (3) solo muestra datos.
-    // Si se selecciona AireSmart (3), usamos la combinación de datos de TerraSmart 1 (1) y TerraSmart 2 (2).
+    // Para cultivos, cada dispositivo de suelo se analiza con sus propios datos.
+    // Dispositivo 1 usa solo sensorData[1], Dispositivo 2 solo sensorData[2].
     let realData: any = {};
 
-    if (selectedDispositivo === 3) {
-      const data1 = sensorData[1] || {};
-      const data2 = sensorData[2] || {};
-      realData = { ...data1, ...data2 };
-    } else if (selectedDispositivo && selectedDispositivo !== 4) {
+    if (selectedDispositivo && selectedDispositivo !== 4) {
       realData = sensorData[selectedDispositivo] || {};
     }
 
@@ -314,7 +319,7 @@ export default function Home() {
       const humidityRange = parseRange(crop.humidityRange);
       if (humidityRange && (humidity < humidityRange.min || humidity > humidityRange.max)) {
         compatible = false;
-        issues.push(`Humedad fuera de rango (actual: ${humidity}%, ideal: ${crop.humidityRange})`);
+        issues.push(`Humedad fuera de rango (actual: ${humidity}%, ideal: ${crop.humidityRange} de humedad del suelo)`);
       } else {
         passedChecks++;
       }
@@ -327,7 +332,7 @@ export default function Home() {
       const phRange = parseRange(crop.phRange);
       if (phRange && (ph < phRange.min || ph > phRange.max)) {
         compatible = false;
-        issues.push(`pH fuera de rango (actual: ${ph}, ideal: ${crop.phRange})`);
+        issues.push(`pH fuera de rango (actual: ${ph}, ideal: ${crop.phRange} unidades de pH)`);
       } else {
         passedChecks++;
       }
@@ -340,7 +345,7 @@ export default function Home() {
       const nutrientsRange = parseRange(crop.nutrientsRange);
       if (nutrientsRange && (ec < nutrientsRange.min || ec > nutrientsRange.max)) {
         compatible = false;
-        issues.push(`Conductividad eléctrica fuera de rango (actual: ${ec} dS/m, ideal: ${crop.nutrientsRange})`);
+        issues.push(`Conductividad eléctrica fuera de rango (actual: ${ec} dS/m, ideal: ${crop.nutrientsRange} dS/m)`);
       } else {
         passedChecks++;
       }
@@ -353,7 +358,7 @@ export default function Home() {
       const nitrogenRange = parseRange(crop.nitrogenRange);
       if (nitrogenRange && (nitrogen < nitrogenRange.min || nitrogen > nitrogenRange.max)) {
         compatible = false;
-        issues.push(`Nitrógeno fuera de rango (actual: ${nitrogen} kg/ha, ideal: ${crop.nitrogenRange})`);
+        issues.push(`Nitrógeno fuera de rango (actual: ${nitrogen} kg/ha, ideal: ${crop.nitrogenRange} kg/ha)`);
       } else {
         passedChecks++;
       }
@@ -366,7 +371,7 @@ export default function Home() {
       const phosphorusRange = parseRange(crop.phosphorusRange);
       if (phosphorusRange && (phosphorus < phosphorusRange.min || phosphorus > phosphorusRange.max)) {
         compatible = false;
-        issues.push(`Fósforo fuera de rango (actual: ${phosphorus} kg/ha, ideal: ${crop.phosphorusRange})`);
+        issues.push(`Fósforo fuera de rango (actual: ${phosphorus} kg/ha, ideal: ${crop.phosphorusRange} kg/ha)`);
       } else {
         passedChecks++;
       }
@@ -379,7 +384,7 @@ export default function Home() {
       const potassiumRange = parseRange(crop.potassiumRange);
       if (potassiumRange && (potassium < potassiumRange.min || potassium > potassiumRange.max)) {
         compatible = false;
-        issues.push(`Potasio fuera de rango (actual: ${potassium} kg/ha, ideal: ${crop.potassiumRange})`);
+        issues.push(`Potasio fuera de rango (actual: ${potassium} kg/ha, ideal: ${crop.potassiumRange} kg/ha)`);
       } else {
         passedChecks++;
       }
@@ -392,7 +397,7 @@ export default function Home() {
       const soilTempRange = parseRange(crop.soilTempRange);
       if (soilTempRange && (soilTemp < soilTempRange.min || soilTemp > soilTempRange.max)) {
         compatible = false;
-        issues.push(`Temperatura del suelo fuera de rango (actual: ${soilTemp}°C, ideal: ${crop.soilTempRange}°C)`);
+        issues.push(`Temperatura del suelo fuera de rango (actual: ${soilTemp}°C, ideal: ${crop.soilTempRange}°C en el suelo)`);
       } else {
         passedChecks++;
       }
@@ -405,7 +410,7 @@ export default function Home() {
       const airTempRange = parseRange(crop.airTempRange);
       if (airTempRange && (airTemp < airTempRange.min || airTemp > airTempRange.max)) {
         compatible = false;
-        issues.push(`Temperatura ambiente fuera de rango (actual: ${airTemp}°C, ideal: ${crop.airTempRange}°C)`);
+        issues.push(`Temperatura ambiente fuera de rango (actual: ${airTemp}°C, ideal: ${crop.airTempRange}°C de aire ambiente)`);
       } else {
         passedChecks++;
       }
@@ -1195,7 +1200,11 @@ export default function Home() {
           {/* AireSmart Card (antes Tierra 1) */}
           <div className="bg-white rounded-lg p-6 sm:p-8 flex flex-col items-center shadow-sm">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-amber-100 flex items-center justify-center mb-3 sm:mb-4">
-              <Sprout className="w-10 h-10 sm:w-12 sm:h-12 text-amber-600" strokeWidth={1.5} />
+              <img
+                src="/images/emojis/aire.png"
+                alt="Icono AireSmart"
+                className="w-10 h-10 sm:w-12 sm:h-12 object-contain"
+              />
             </div>
             <h3 className="text-lg sm:text-xl text-amber-700 mb-2 sm:mb-3">AireSmart</h3>
             <p className="text-center text-xs sm:text-sm mb-4 sm:mb-6">
@@ -1500,7 +1509,10 @@ export default function Home() {
                     </div>
 
                     <p className="text-center mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600 px-4">
-                      Análisis basado en las mediciones actuales de tus sensores de suelo.
+                      {selectedDispositivo === 1 &&
+                        'Análisis basado en las mediciones actuales de tus sensores del dispositivo 1.'}
+                      {selectedDispositivo === 2 &&
+                        'Análisis basado en las mediciones actuales de tus sensores del dispositivo 2.'}
                     </p>
 
                     <p className="text-center mb-6 sm:mb-8 text-base sm:text-lg px-4">

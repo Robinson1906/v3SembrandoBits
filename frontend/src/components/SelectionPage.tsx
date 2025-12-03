@@ -47,12 +47,12 @@ export default function SelectionPage() {
         </h2>
         
         <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Terreno Card */}
+          {/* TerraSmart Card (antes Terreno) */}
           <div className="bg-white rounded-lg p-8 flex flex-col items-center shadow-sm">
             <div className="w-20 h-20 rounded-full bg-[#7cb342]/10 flex items-center justify-center mb-4">
               <Leaf className="w-12 h-12 text-[#7cb342]" strokeWidth={1.5} />
             </div>
-            <h3 className="text-xl text-[#7cb342] mb-3">Terreno</h3>
+            <h3 className="text-xl text-[#7cb342] mb-3">TerraSmart</h3>
             <p className="text-center text-sm mb-6">
               Explora sensores del suelo (humedad, pH, nutrientes).
             </p>

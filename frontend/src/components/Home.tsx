@@ -109,8 +109,10 @@ const scrollToId = (id: string, smooth: boolean = true) => {
   });
 };
 
+type Medio = 'terreno' | 'aire' | 'tierra1';
+
 export default function Home() {
-  const [selectedMedio, setSelectedMedio] = useState<'terreno' | 'aire' | null>(null);
+  const [selectedMedio, setSelectedMedio] = useState<Medio | null>(null);
   const [selectedDispositivo, setSelectedDispositivo] = useState<1 | 2 | 3 | 4 | null>(null);
   const [selectedCrop, setSelectedCrop] = useState<string | null>(null);
   const [rating, setRating] = useState(0);
@@ -231,7 +233,7 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleMedioSelection = (medio: 'terreno' | 'aire') => {
+  const handleMedioSelection = (medio: 'terreno' | 'aire' | 'tierra1') => {
     // Si ya está seleccionado el mismo medio, retraer (deseleccionar)
     if (selectedMedio === medio) {
       setSelectedMedio(null);
@@ -245,8 +247,10 @@ export default function Home() {
       
       if (medio === 'aire') {
         scrollToId('aire-analisis');
-      } else {
+      } else if (medio === 'terreno') {
         scrollToId('dispositivo');
+      } else if (medio === 'tierra1') {
+        scrollToId('tierra-1');
       }
     }
   };
@@ -272,14 +276,14 @@ export default function Home() {
   };
 
   const calculateCropCompatibility = (cropId: string) => {
-    // Para cultivos, el dispositivo 1 solo muestra datos.
-    // Si se selecciona el 1, usamos la combinación de datos de los dispositivos 2 y 3.
+    // Para cultivos, AireSmart (3) solo muestra datos.
+    // Si se selecciona AireSmart (3), usamos la combinación de datos de TerraSmart 1 (1) y TerraSmart 2 (2).
     let realData: any = {};
 
-    if (selectedDispositivo === 1) {
+    if (selectedDispositivo === 3) {
+      const data1 = sensorData[1] || {};
       const data2 = sensorData[2] || {};
-      const data3 = sensorData[3] || {};
-      realData = { ...data2, ...data3 };
+      realData = { ...data1, ...data2 };
     } else if (selectedDispositivo && selectedDispositivo !== 4) {
       realData = sensorData[selectedDispositivo] || {};
     }
@@ -1145,13 +1149,13 @@ export default function Home() {
           Selecciona el Medio a explorar
         </h2>
         
-        <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-          {/* Terreno Card */}
+        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+          {/* TerraSmart Card (antes Terreno) */}
           <div className="bg-white rounded-lg p-6 sm:p-8 flex flex-col items-center shadow-sm">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#7cb342]/10 flex items-center justify-center mb-3 sm:mb-4">
               <Leaf className="w-10 h-10 sm:w-12 sm:h-12 text-[#7cb342]" strokeWidth={1.5} />
             </div>
-            <h3 className="text-lg sm:text-xl text-[#7cb342] mb-2 sm:mb-3">Terreno</h3>
+            <h3 className="text-lg sm:text-xl text-[#7cb342] mb-2 sm:mb-3">TerraSmart</h3>
             <p className="text-center text-xs sm:text-sm mb-4 sm:mb-6">
               Explora sensores del suelo (humedad, pH, nutrientes).
             </p>
@@ -1167,14 +1171,14 @@ export default function Home() {
             </Button>
           </div>
 
-          {/* Aire Card */}
+          {/* AtmoSmart Card (antes Aire) */}
           <div className="bg-white rounded-lg p-6 sm:p-8 flex flex-col items-center shadow-sm">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-blue-100 flex items-center justify-center mb-3 sm:mb-4">
               <Cloud className="w-10 h-10 sm:w-12 sm:h-12 text-blue-500" strokeWidth={1.5} />
             </div>
-            <h3 className="text-lg sm:text-xl text-blue-500 mb-2 sm:mb-3">Aire</h3>
+            <h3 className="text-lg sm:text-xl text-blue-500 mb-2 sm:mb-3">AtmoSmart</h3>
             <p className="text-center text-xs sm:text-sm mb-4 sm:mb-6">
-              Explora sensores del entorno (temperatura, gases, humedad).
+              Explora sensores AtmoSmart (temperatura, gases, humedad).
             </p>
             <Button 
               onClick={() => handleMedioSelection('aire')}
@@ -1187,13 +1191,121 @@ export default function Home() {
               Haz click aquí
             </Button>
           </div>
+
+          {/* AireSmart Card (antes Tierra 1) */}
+          <div className="bg-white rounded-lg p-6 sm:p-8 flex flex-col items-center shadow-sm">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-amber-100 flex items-center justify-center mb-3 sm:mb-4">
+              <Sprout className="w-10 h-10 sm:w-12 sm:h-12 text-amber-600" strokeWidth={1.5} />
+            </div>
+            <h3 className="text-lg sm:text-xl text-amber-700 mb-2 sm:mb-3">AireSmart</h3>
+            <p className="text-center text-xs sm:text-sm mb-4 sm:mb-6">
+              Se encarga de monitorear la calidad del aire.
+            </p>
+            <Button 
+              onClick={() => handleMedioSelection('tierra1')}
+              className={`${
+                selectedMedio === 'tierra1' 
+                  ? 'bg-amber-600 hover:bg-amber-700' 
+                  : 'bg-amber-500 hover:bg-amber-600'
+              } text-white px-4 sm:px-6 py-2 text-sm sm:text-base min-h-[44px]`}
+            >
+              Haz click aquí
+            </Button>
+          </div>
         </div>
       </section>
+
+      {/* SECCIÓN AireSmart (antes Tierra 1) - Solo visible si selectedMedio === 'tierra1' */}
+      {selectedMedio === 'tierra1' && (
+          <section id="tierra-1" className="bg-white py-8 sm:py-12 px-4 sm:px-6">
+            <div className="max-w-3xl mx-auto">
+              <div className="bg-[#f5f5dc] rounded-lg p-4 sm:p-8">
+                <h3 className="text-center text-lg sm:text-xl mb-4 sm:mb-6">
+                  Sensores de AireSmart
+                </h3>
+
+                {loading && selectedDispositivo === 3 && (
+                  <div className="text-center mb-4">
+                    <div className="inline-flex items-center gap-2 text-[#7cb342]">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#7cb342]"></div>
+                      Cargando datos...
+                    </div>
+                  </div>
+                )}
+
+                {dataAge[3] && (
+                  <div className="text-center mb-4 text-xs text-gray-500">
+                    Última actualización: {new Date(dataAge[3]!).toLocaleTimeString('es-ES')}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                  {isInitialLoading && (!sensorData[3] || Object.keys(sensorData[3] || {}).length === 0)
+                    ? Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center">
+                          <Skeleton className="w-10 h-10 rounded-full mb-3" />
+                          <Skeleton className="h-4 w-2/3 mb-2" />
+                          <Skeleton className="h-6 w-1/2 mb-2" />
+                          <Skeleton className="h-3 w-full" />
+                        </div>
+                      ))
+                    : (camposSensor[3] || []).map((campoNombre, index) => {
+                      const valorBruto = sensorData[3]?.[campoNombre];
+                        const isNumeric = typeof valorBruto === 'number' || (!isNaN(parseFloat(valorBruto)) && valorBruto !== null && valorBruto !== undefined);
+                        let valorFormateado = valorBruto ?? 'Sin datos';
+                        let unidad = '';
+
+                        const campoLower = campoNombre.toLowerCase();
+                        if (isNumeric) {
+                          const num = typeof valorBruto === 'number' ? valorBruto : parseFloat(valorBruto);
+                          if (campoLower.includes('hum') || campoLower.includes('humedad')) {
+                            valorFormateado = num.toFixed(1);
+                            unidad = '%';
+                          } else if (campoLower.includes('ph')) {
+                            valorFormateado = num.toFixed(2);
+                          } else if (campoLower.includes('conductividad') || campoLower.includes('ec')) {
+                            valorFormateado = num.toFixed(2);
+                            unidad = 'dS/m';
+                          } else {
+                            valorFormateado = num.toFixed(2);
+                          }
+                        }
+
+                        const descripcion = getDescriptionForField(campoNombre);
+                        const icon = getIconForField(campoNombre);
+                        const hasRealData = valorBruto !== undefined && valorBruto !== null;
+
+                        return (
+                          <div
+                            key={index}
+                            className={`bg-white rounded-lg p-4 sm:p-6 flex flex-col items-center shadow-sm relative transition-opacity duration-200 ${
+                              isUpdatingDevice[3] ? 'opacity-60' : 'opacity-100'
+                            }`}
+                          >
+                            {hasRealData && (
+                              <div className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Datos en tiempo real"></div>
+                            )}
+                            {icon}
+                            <h4 className="mt-3 mb-1 text-center text-sm sm:text-base">{campoNombre}</h4>
+                            <div className="flex items-baseline justify-center gap-1">
+                              <span className="text-2xl sm:text-3xl text-[#7cb342] font-semibold leading-tight">{valorFormateado}</span>
+                              {unidad && (
+                                <span className="text-sm sm:text-base text-[#7cb342] font-medium">{unidad}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                </div>
+              </div>
+            </div>
+          </section>
+      )}
 
       {/* SECCIONES DE TERRENO - Solo visible si selectedMedio === 'terreno' */}
       {selectedMedio === 'terreno' && (
         <>
-          {/* Select Device Section */}
+          {/* Select Device Section para dispositivos de suelo 1 y 2 */}
           <section id="dispositivo" className="bg-white py-8 sm:py-12 px-4 sm:px-6">
             <h2 className="text-center text-xl sm:text-2xl mb-6 sm:mb-8">
               Selecciona el dispositivo que quieres revisar
@@ -1205,44 +1317,32 @@ export default function Home() {
                   onClick={() => setSelectedDispositivo(selectedDispositivo === 1 ? null : 1)}
                   className={`${
                     selectedDispositivo === 1 
-                      ? 'bg-[#ff8a65] hover:bg-[#ff7043]' 
-                      : 'bg-[#ffab91] hover:bg-[#ff8a65]'
+                      ? 'bg-[#66bb6a] hover:bg-[#4caf50]' 
+                      : 'bg-[#81c784] hover:bg-[#66bb6a]'
                   } text-black px-4 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-2 text-sm sm:text-base min-h-[44px]`}
                 >
                   {selectedDispositivo === 1 && <Check className="w-4 h-4" />}
-                  Dispositivo 1
+                  Dispositivo 1 
                 </Button>
 
                 <Button
                   onClick={() => setSelectedDispositivo(selectedDispositivo === 2 ? null : 2)}
                   className={`${
                     selectedDispositivo === 2 
-                      ? 'bg-[#66bb6a] hover:bg-[#4caf50]' 
-                      : 'bg-[#81c784] hover:bg-[#66bb6a]'
-                  } text-black px-4 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-2 text-sm sm:text-base min-h-[44px]`}
-                >
-                  {selectedDispositivo === 2 && <Check className="w-4 h-4" />}
-                  Dispositivo 2
-                </Button>
-
-                <Button
-                  onClick={() => setSelectedDispositivo(selectedDispositivo === 3 ? null : 3)}
-                  className={`${
-                    selectedDispositivo === 3 
                       ? 'bg-[#ffd54f] hover:bg-[#ffca28]' 
                       : 'bg-[#ffe082] hover:bg-[#ffd54f]'
                   } text-black px-4 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-2 text-sm sm:text-base min-h-[44px]`}
                 >
-                  {selectedDispositivo === 3 && <Check className="w-4 h-4" />}
-                  Dispositivo 3
+                  {selectedDispositivo === 2 && <Check className="w-4 h-4" />}
+                  Dispositivo 2 
                 </Button>
               </div>
 
-              {/* Desplegable de sensores: solo para dispositivos de terreno (1,2,3) */}
-              {(selectedDispositivo === 1 || selectedDispositivo === 2 || selectedDispositivo === 3) && dispositivoSeleccionado && (
+              {/* Desplegable de sensores: solo para dispositivos de terreno 1 y 2 */}
+              {(selectedDispositivo === 1 || selectedDispositivo === 2) && dispositivoSeleccionado && (
                 <div className="mt-6 sm:mt-8 bg-[#f5f5dc] rounded-lg p-4 sm:p-8">
                   <h3 className="text-center text-lg sm:text-xl mb-4 sm:mb-6">
-                    Sensores del {dispositivoSeleccionado.nombre}
+                    Sensores de {selectedDispositivo === 1 ? 'Dispositivo 1' : 'Dispositivo 2'}
                   </h3>
 
                   {loading && (
@@ -1288,9 +1388,6 @@ export default function Home() {
                               {sensor.icon}
                               <h4 className="mt-3 mb-2 text-center text-sm sm:text-base">{sensor.nombre}</h4>
                               <div className="text-2xl sm:text-3xl text-[#7cb342] mb-2 font-semibold">{sensor.valor}</div>
-                              <p className="text-xs text-center text-gray-600">
-                                {sensor.descripcion}
-                              </p>
                             </div>
                           );
                         })}
@@ -1440,18 +1537,18 @@ export default function Home() {
         </>
       )}
 
-      {/* SECCIÓN DE AIRE - Solo visible si selectedMedio === 'aire' */}
+      {/* SECCIÓN ATMOSMART (antes Aire) - Solo visible si selectedMedio === 'aire' */}
       {selectedMedio === 'aire' && (
         <section id="aire-analisis" className="bg-[#e3f2fd] py-8 sm:py-12 px-4 sm:px-6">
           <h2 className="text-center text-xl sm:text-2xl mb-3 sm:mb-4">
-            Análisis de calidad del aire
+            Análisis de calidad AtmoSmart
           </h2>
 
           <p className="text-center italic mb-6 sm:mb-8 text-sm sm:text-base">
-            El aire huele a montaña despejada.
+            El entorno AtmoSmart huele a montaña despejada.
           </p>
 
-          {/* Indicador de calidad del aire basado en datos reales */}
+          {/* Indicador de calidad AtmoSmart basado en datos reales */}
           <div className="max-w-3xl mx-auto bg-white rounded-lg p-4 sm:p-8 mb-4 sm:mb-6">
             <div className="flex justify-center gap-4 sm:gap-8 mb-4 sm:mb-6">
               <div
@@ -1461,7 +1558,7 @@ export default function Home() {
                     : 'bg-[#4caf50] opacity-30'
                 }`}
               >
-                <img src={compatible} alt="Aire bueno" className="w-full h-full object-contain" />
+                <img src={compatible} alt="AtmoSmart bueno" className="w-full h-full object-contain" />
               </div>
               <div
                 className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all ${
@@ -1470,7 +1567,7 @@ export default function Home() {
                     : 'bg-[#ffeb3b] opacity-30'
                 }`}
               >
-                <img src={neutral} alt="Aire moderado" className="w-full h-full object-contain" />
+                <img src={neutral} alt="AtmoSmart moderado" className="w-full h-full object-contain" />
               </div>
               <div
                 className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all ${
@@ -1479,7 +1576,7 @@ export default function Home() {
                     : 'bg-[#f44336] opacity-30'
                 }`}
               >
-                <img src={noCompatible} alt="Aire malo" className="w-full h-full object-contain" />
+                <img src={noCompatible} alt="AtmoSmart malo" className="w-full h-full object-contain" />
               </div>
             </div>
 
@@ -1487,34 +1584,34 @@ export default function Home() {
               {calidadAireCalculada === 'bueno' && (
                 <>
                   Nuestros sensores indican un ambiente con{' '}
-                  <span className="inline-block px-3 py-1 bg-gray-100 rounded">Aire limpio</span>
+                  <span className="inline-block px-3 py-1 bg-gray-100 rounded">AtmoSmart limpio</span>
                   , óptimo para tus cultivos.
                 </>
               )}
               {calidadAireCalculada === 'moderado' && (
                 <>
-                  El aire es aceptable, pero{' '}
+                  El entorno AtmoSmart es aceptable, pero{' '}
                   <span className="inline-block px-3 py-1 bg-yellow-100 rounded">revisa ventilación y humedad</span>.
                 </>
               )}
               {calidadAireCalculada === 'malo' && (
                 <>
                   Nuestros sensores detectan{' '}
-                  <span className="inline-block px-3 py-1 bg-red-100 rounded">condiciones de aire no favorables</span>
+                  <span className="inline-block px-3 py-1 bg-red-100 rounded">condiciones AtmoSmart no favorables</span>
                   . Considera mejorar la ventilación.
                 </>
               )}
             </p>
 
             <p className="text-center italic text-xs sm:text-sm">
-              "El aire que respira tu cultivo también cuenta para su salud."
+              "El entorno AtmoSmart que rodea tu cultivo también cuenta para su salud."
             </p>
           </div>
 
           {/* Cards dinámicas para todos los campos vinculados al dispositivo 4 */}
           <div className="mt-8 max-w-5xl mx-auto bg-white/60 rounded-lg p-4 sm:p-6">
             <h4 className="text-center text-base sm:text-lg mb-4 sm:mb-6">
-              Variables medidas por el sensor de aire
+              Variables medidas por el sensor AtmoSmart
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {dispositivoAire.sensores.map((sensor, index) => {
@@ -1534,7 +1631,6 @@ export default function Home() {
                     {sensor.icon}
                     <h5 className="mt-3 mb-2 text-center text-sm sm:text-base">{sensor.nombre}</h5>
                     <div className="text-2xl sm:text-3xl text-[#2196f3] mb-2 font-semibold">{sensor.valor}</div>
-                    <p className="text-xs text-center text-gray-600">{sensor.descripcion}</p>
                   </div>
                 );
               })}
@@ -1698,7 +1794,7 @@ export default function Home() {
               onClick={scrollToTop}
               className="bg-[#7cb342] hover:bg-[#689f38] text-white px-6 sm:px-8 py-2 sm:py-3 text-sm sm:text-base min-h-[44px]"
             >
-              Volver al inicio
+              Enviar
             </Button>
           </div>
         </div>
@@ -1711,10 +1807,10 @@ export default function Home() {
             <Wheat className="w-5 h-5 sm:w-6 sm:h-6" />
             <span className="text-[10px] sm:text-xs text-center">Cultivo</span>
           </div>
-          <div className="flex flex-col items-center gap-2 min-w-[60px]">
-            <Droplet className="w-5 h-5 sm:w-6 sm:h-6" />
-            <span className="text-[10px] sm:text-xs text-center">Tierra</span>
-          </div>
+            <div className="flex flex-col items-center gap-2 min-w-[60px]">
+              <Droplet className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span className="text-[10px] sm:text-xs text-center">Tierra</span>
+            </div>
           <div className="flex flex-col items-center gap-2 min-w-[60px]">
             <Sprout className="w-5 h-5 sm:w-6 sm:h-6" />
             <span className="text-[10px] sm:text-xs text-center">Datos</span>

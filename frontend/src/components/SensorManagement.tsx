@@ -481,14 +481,25 @@ export function SensorManagement() {
                         const vincActual = vinculaciones[sensor.sensor_id!] || null;
                         const dispositivoActual = dispositivos.find(d => d._id === vincActual || sensor.dispositivo_id === d._id);
                         const indiceDispositivo = dispositivoActual ? dispositivos.findIndex(d => d._id === dispositivoActual._id) : -1;
-                        const nombreBase = dispositivoActual?.nombre || (indiceDispositivo >= 0 ? `Dispositivo ${indiceDispositivo + 1}` : "");
 
-                        const etiquetaMedio = indiceDispositivo === 3 ? "Aire" : "Tierra";
-                        const nombreDispositivo = nombreBase
-                          ? `${nombreBase} (${etiquetaMedio})`
-                          : etiquetaMedio === "Aire"
-                            ? "Dispositivo Aire"
-                            : "Dispositivo Tierra";
+                        let nombreDispositivo = "";
+
+                        if (indiceDispositivo === 3) {
+                          // Dispositivo físico 4: AtmoSmart (forzado)
+                          nombreDispositivo = "AtmoSmart";
+                        } else if (indiceDispositivo === 0) {
+                          // Dispositivo físico 1: TerraSmart (para análisis general)
+                          nombreDispositivo = dispositivoActual?.nombre || "Dispositivo 1 (TerraSmart)";
+                        } else if (indiceDispositivo === 1) {
+                          // Dispositivo físico 2: TerraSmart (para análisis general)
+                          nombreDispositivo = dispositivoActual?.nombre || "Dispositivo 2 (TerraSmart)";
+                        } else if (indiceDispositivo === 2) {
+                          // Dispositivo físico 3: AireSmart (vista dedicada)
+                          nombreDispositivo = dispositivoActual?.nombre || "AireSmart";
+                        } else if (indiceDispositivo >= 0) {
+                          // Cualquier otro dispositivo de suelo adicional
+                          nombreDispositivo = dispositivoActual?.nombre || `Dispositivo Tierra ${indiceDispositivo + 1}`;
+                        }
 
                         return (
                           <TableRow key={sensor.sensor_id}>
@@ -525,11 +536,20 @@ export function SensorManagement() {
                                     let label: string;
 
                                     if (index === 3) {
-                                      // Cuarto dispositivo: mostrar literalmente "Dispositivo 4 Aire"
-                                      label = dispositivo.nombre || 'Dispositivo 4 Aire';
+                                      // Dispositivo físico 4: AtmoSmart (forzado)
+                                      label = 'AtmoSmart';
+                                    } else if (index === 0) {
+                                      // Dispositivo físico 1: TerraSmart (para análisis general)
+                                      label = dispositivo.nombre || 'Dispositivo 1 (TerraSmart)';
+                                    } else if (index === 1) {
+                                      // Dispositivo físico 2: TerraSmart (para análisis general)
+                                      label = dispositivo.nombre || 'Dispositivo 2 (TerraSmart)';
+                                    } else if (index === 2) {
+                                      // Dispositivo físico 3: AireSmart (vista dedicada)
+                                      label = dispositivo.nombre || 'AireSmart';
                                     } else {
-                                      const base = dispositivo.nombre || `Dispositivo ${index + 1}`;
-                                      label = `${base} Tierra`;
+                                      // Cualquier otro dispositivo de suelo adicional
+                                      label = dispositivo.nombre || `Dispositivo Tierra ${index + 1}`;
                                     }
 
                                     return (

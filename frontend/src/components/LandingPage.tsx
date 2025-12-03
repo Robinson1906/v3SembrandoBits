@@ -54,7 +54,7 @@ export default function LandingPage({ onExplore }: LandingPageProps) {
 
             {/* Subtitle */}
             <p className="mb-4 max-w-xl">
-              Sistema IoT para monitorear variables de suelo y aire en entornos rurales
+              Sistema IoT para monitorear variables de suelo y AtmoSmart en entornos rurales
             </p>
 
             {/* Description */}

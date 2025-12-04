@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { SensorCard } from "./SensorCard";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Badge } from "./ui/badge";

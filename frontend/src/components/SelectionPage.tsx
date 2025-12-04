@@ -70,10 +70,10 @@ export default function SelectionPage() {
 
           {/* Aire Card */}
           <div className="bg-white rounded-lg p-8 flex flex-col items-center shadow-sm">
-            <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-              <Cloud className="w-12 h-12 text-blue-500" strokeWidth={1.5} />
+            <div className="w-20 h-20 rounded-full bg-[#03559e]/40 flex items-center justify-center mb-4">
+              <Cloud className="w-12 h-12 text-[#02447f]" strokeWidth={1.5} />
             </div>
-            <h3 className="text-xl text-blue-500 mb-3">Aire</h3>
+            <h3 className="text-xl text-[#02447f] mb-3">Aire</h3>
             <p className="text-center text-sm mb-6">
               Explora sensores del entorno (temperatura, gases, humedad).
             </p>
@@ -81,8 +81,8 @@ export default function SelectionPage() {
               onClick={() => setSelectedMedio('aire')}
               className={`${
                 selectedMedio === 'aire' 
-                  ? 'bg-blue-500 hover:bg-blue-600' 
-                  : 'bg-blue-400 hover:bg-blue-500'
+                  ? 'bg-[#02447f] hover:bg-[#013866]' 
+                  : 'bg-[#03559e] hover:bg-[#02447f]'
               } text-white px-6`}
             >
               Haz click aquí
@@ -107,7 +107,7 @@ export default function SelectionPage() {
             } text-black px-6 py-3 rounded-full flex items-center gap-2`}
           >
             {selectedDispositivo === 1 && <Check className="w-4 h-4" />}
-            Dispositivo 1
+            TerraSmart 1
           </Button>
 
           <Button
@@ -119,7 +119,7 @@ export default function SelectionPage() {
             } text-black px-6 py-3 rounded-full flex items-center gap-2`}
           >
             {selectedDispositivo === 2 && <Check className="w-4 h-4" />}
-            Dispositivo 2
+            TerraSmart 2
           </Button>
 
           <Button

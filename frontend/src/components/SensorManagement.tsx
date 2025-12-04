@@ -10,11 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Separator } from "./ui/separator";
-import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { 
   Plus, 
   Edit, 
-  Power, 
   Trash2, 
   Settings,
   Activity,
@@ -23,8 +21,7 @@ import {
   CheckCircle,
   XCircle,
   Star,
-  Link,
-  Unlink
+  Link
 } from "lucide-react";
 import { toast } from "sonner";
 import { Calificaciones } from "./Calificaciones";
@@ -489,10 +486,10 @@ export function SensorManagement() {
                           nombreDispositivo = "AtmoSmart";
                         } else if (indiceDispositivo === 0) {
                           // Dispositivo físico 1: TerraSmart (para análisis general)
-                          nombreDispositivo = dispositivoActual?.nombre || "Dispositivo 1 (TerraSmart)";
+                          nombreDispositivo = dispositivoActual?.nombre || "TerraSmart 1";
                         } else if (indiceDispositivo === 1) {
                           // Dispositivo físico 2: TerraSmart (para análisis general)
-                          nombreDispositivo = dispositivoActual?.nombre || "Dispositivo 2 (TerraSmart)";
+                          nombreDispositivo = dispositivoActual?.nombre || "TerraSmart 2";
                         } else if (indiceDispositivo === 2) {
                           // Dispositivo físico 3: AireSmart (vista dedicada)
                           nombreDispositivo = dispositivoActual?.nombre || "AireSmart";
@@ -540,10 +537,10 @@ export function SensorManagement() {
                                       label = 'AtmoSmart';
                                     } else if (index === 0) {
                                       // Dispositivo físico 1: TerraSmart (para análisis general)
-                                      label = dispositivo.nombre || 'Dispositivo 1 (TerraSmart)';
+                                      label = dispositivo.nombre || 'TerraSmart 1';
                                     } else if (index === 1) {
                                       // Dispositivo físico 2: TerraSmart (para análisis general)
-                                      label = dispositivo.nombre || 'Dispositivo 2 (TerraSmart)';
+                                      label = dispositivo.nombre || 'TerraSmart 2';
                                     } else if (index === 2) {
                                       // Dispositivo físico 3: AireSmart (vista dedicada)
                                       label = dispositivo.nombre || 'AireSmart';

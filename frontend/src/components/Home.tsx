@@ -261,7 +261,7 @@ export default function Home() {
   const handleCropSelection = (cropId: string) => {
     // Solo permitir selección de cultivo si hay un dispositivo de suelo seleccionado (1 o 2)
     if (selectedDispositivo !== 1 && selectedDispositivo !== 2) {
-      toast.error('Primero selecciona el dispositivo 1 o 2 para analizar el cultivo.');
+      toast.error('Primero selecciona TerraSmart 1 o 2 para analizar el cultivo.');
       return;
     }
 
@@ -286,7 +286,7 @@ export default function Home() {
 
   const calculateCropCompatibility = (cropId: string) => {
     // Para cultivos, cada dispositivo de suelo se analiza con sus propios datos.
-    // Dispositivo 1 usa solo sensorData[1], Dispositivo 2 solo sensorData[2].
+    // TerraSmart 1 usa solo sensorData[1], TerraSmart 2 solo sensorData[2].
     let realData: any = {};
 
     if (selectedDispositivo && selectedDispositivo !== 4) {
@@ -312,8 +312,8 @@ export default function Home() {
       return null;
     };
 
-    // Check humidity - buscar por patrones
-    const humidity = findFieldValue(realData, ['humedad', 'humidity', 'hum', 'soilhum']);
+    // Check humidity - buscar por patrones (incluye nombres con mayúsculas y guiones bajos)
+    const humidity = findFieldValue(realData, ['humedad_suelo', 'humedad', 'humidity', 'hum', 'soilhum']);
     if (humidity !== null) {
       totalChecks++;
       const humidityRange = parseRange(crop.humidityRange);
@@ -404,7 +404,7 @@ export default function Home() {
     }
 
     // Check Air Temperature
-    const airTemp = findFieldValue(realData, ['temperatura_ambiente', 'temperatura', 'temp', 'airtemp', 'temperature']);
+    const airTemp = findFieldValue(realData, ['temperatura_aire', 'temperatura_ambiente', 'temperatura', 'temp', 'airtemp', 'temperature']);
     if (airTemp !== null && crop.airTempRange) {
       totalChecks++;
       const airTempRange = parseRange(crop.airTempRange);
@@ -553,53 +553,40 @@ export default function Home() {
       return tarjetas;
     }
 
-    // Temperatura del aire
-    const tempAire = findFieldValue(dataToUse, [
-      'temperatura_aire',
-      'temp_aire',
-      'temperatura_ambiente',
-      'temp_ambiente',
-      'airtemp',
-      'temperature_air'
-    ]);
-    if (tempAire !== null) {
-      tarjetas.push({
-        id: 'temp-aire',
-        nombre: 'Temperatura',
-        valor: `${tempAire.toFixed(1)}°C`,
-        descripcion: 'Temperatura del aire medida por el sensor',
-        icon: <span className="text-3xl sm:text-4xl">🌡️</span>
-      });
-    }
+    const dataToUse = sensorData[4];
 
-    // Humedad relativa
-    const humedadRel = findFieldValue(dataToUse, [
-      'humedad_aire',
-      'humedad_relativa',
-      'hr',
-      'humidity_air',
-      'relative_humidity'
-    ]);
-    if (humedadRel !== null) {
-      tarjetas.push({
-        id: 'hum-aire',
-        nombre: 'Humedad Relativa',
-        valor: `${humedadRel.toFixed(0)}%`,
-        descripcion: 'Cantidad de humedad presente en el aire',
-        icon: <span className="text-3xl sm:text-4xl">💧</span>
-      });
-    }
+    // Crear tarjetas dinámicas para cada campo del dispositivo 4
+    camposSensor[4].forEach(campo => {
+      let displayValue = 'Cargando...';
+      let icon: React.ReactNode = <span className="text-3xl sm:text-4xl">📊</span>;
+      const descripcion = getDescriptionForField(campo);
 
-    // Concentración de gases (CO2 / VOC / genérico)
-    const gases = findFieldValue(dataToUse, [
-      'co2',
-      'co2_ppm',
-      'gases',
-      'air_quality',
-      'voc',
-      'mq135'
-    ]);
-    if (gases !== null) {
+      // Si hay datos reales, formatear el valor
+      if (dataToUse && dataToUse[campo] !== undefined && dataToUse[campo] !== null) {
+        const value = dataToUse[campo];
+        const name = campo.toLowerCase();
+
+        // Determinar el icono basado en el nombre del campo
+        if (name.includes('temp') && !name.includes('suelo')) {
+          icon = <span className="text-3xl sm:text-4xl">🌡️</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value}°C`;
+        } else if (name.includes('humedad') && !name.includes('suelo')) {
+          icon = <span className="text-3xl sm:text-4xl">💧</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value}%`;
+        } else if (name.includes('gas') || name.includes('co2') || name.includes('voc') || name.includes('mq')) {
+          icon = <span className="text-3xl sm:text-4xl">🏭</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value}ppm`;
+        } else if (name.includes('presion') || name.includes('pressure')) {
+          icon = <span className="text-3xl sm:text-4xl">🌪️</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(1) : value} hPa`;
+        } else if (name.includes('luz') || name.includes('light') || name.includes('lux')) {
+          icon = <span className="text-3xl sm:text-4xl">☀️</span>;
+          displayValue = `${typeof value === 'number' ? value.toFixed(0) : value} lux`;
+        } else {
+          displayValue = typeof value === 'number' ? value.toFixed(2) : value.toString();
+        }
+      }
+
       tarjetas.push({
         id: campo.toLowerCase().replace(/\s+/g, '-'),
         nombre: campo,
@@ -612,24 +599,15 @@ export default function Home() {
     return tarjetas;
   };
 
-  const airCards = useMemo(() => getAirSensorData(), [sensorData, selectedDispositivo]);
+  const airCards = getAirSensorData();
 
   // Calcular calidad de aire basada en los datos reales del dispositivo 4
   const calcularCalidadAire = (): 'bueno' | 'moderado' | 'malo' => {
-    if (!airCards.length) return airQualityStatus;
-
-    const tempCard = airCards.find(c => c.id === 'temp-aire');
-    const humCard = airCards.find(c => c.id === 'hum-aire');
-    const gasCard = airCards.find(c => c.id === 'gases');
-
-    const parseNumber = (valor: string) => {
-      const num = parseFloat(valor.replace(/[^0-9.-]/g, ''));
-      return isNaN(num) ? null : num;
-    };
-
-    const t = tempCard ? parseNumber(tempCard.valor) : null;
-    const h = humCard ? parseNumber(humCard.valor) : null;
-    const g = gasCard ? parseNumber(gasCard.valor) : null;
+    const dataToUse = sensorData[4];
+    
+    if (!dataToUse || Object.keys(dataToUse).length === 0) {
+      return 'moderado'; // Por defecto si no hay datos
+    }
 
     let score = 0;
     let checks = 0;
@@ -675,7 +653,7 @@ export default function Home() {
       }
     });
 
-    if (checks === 0) return airQualityStatus;
+    if (checks === 0) return 'moderado';
 
     const avg = score / checks;
     if (avg >= 1.5) return 'bueno';
@@ -1182,10 +1160,10 @@ export default function Home() {
 
           {/* AtmoSmart Card (antes Aire) */}
           <div className="bg-white rounded-lg p-6 sm:p-8 flex flex-col items-center shadow-sm">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-blue-100 flex items-center justify-center mb-3 sm:mb-4">
-              <Cloud className="w-10 h-10 sm:w-12 sm:h-12 text-blue-500" strokeWidth={1.5} />
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#03559e]/40 flex items-center justify-center mb-3 sm:mb-4">
+              <Cloud className="w-10 h-10 sm:w-12 sm:h-12 text-[#02447f]" strokeWidth={1.5} />
             </div>
-            <h3 className="text-lg sm:text-xl text-blue-500 mb-2 sm:mb-3">AtmoSmart</h3>
+            <h3 className="text-lg sm:text-xl text-[#02447f] mb-2 sm:mb-3">AtmoSmart</h3>
             <p className="text-center text-xs sm:text-sm mb-4 sm:mb-6">
               Explora sensores AtmoSmart (temperatura, gases, humedad).
             </p>
@@ -1193,8 +1171,8 @@ export default function Home() {
               onClick={() => handleMedioSelection('aire')}
               className={`${
                 selectedMedio === 'aire' 
-                  ? 'bg-blue-500 hover:bg-blue-600' 
-                  : 'bg-blue-400 hover:bg-blue-500'
+                  ? 'bg-[#02447f] hover:bg-[#013866]' 
+                  : 'bg-[#03559e] hover:bg-[#02447f]'
               } text-white px-4 sm:px-6 py-2 text-sm sm:text-base min-h-[44px]`}
             >
               Haz click aquí
@@ -1210,7 +1188,7 @@ export default function Home() {
                 className="w-10 h-10 sm:w-12 sm:h-12 object-contain"
               />
             </div>
-            <h3 className="text-lg sm:text-xl text-amber-700 mb-2 sm:mb-3">AireSmart</h3>
+            <h3 className="text-lg sm:text-xl text-[#4a8db8] mb-2 sm:mb-3">AireSmart</h3>
             <p className="text-center text-xs sm:text-sm mb-4 sm:mb-6">
               Se encarga de monitorear la calidad del aire.
             </p>
@@ -1218,8 +1196,8 @@ export default function Home() {
               onClick={() => handleMedioSelection('tierra1')}
               className={`${
                 selectedMedio === 'tierra1' 
-                  ? 'bg-amber-600 hover:bg-amber-700' 
-                  : 'bg-amber-500 hover:bg-amber-600'
+                  ? 'bg-[#4a8db8] hover:bg-[#3d7a9f]' 
+                  : 'bg-[#6ea8c9] hover:bg-[#4a8db8]'
               } text-white px-4 sm:px-6 py-2 text-sm sm:text-base min-h-[44px]`}
             >
               Haz click aquí
@@ -1335,10 +1313,8 @@ export default function Home() {
                   } text-black px-4 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-2 text-sm sm:text-base min-h-[44px]`}
                 >
                   {selectedDispositivo === 1 && <Check className="w-4 h-4" />}
-                  Dispositivo 1 
-                </Button>
-
-                <Button
+                  TerraSmart 1
+                </Button>                <Button
                   onClick={() => setSelectedDispositivo(selectedDispositivo === 2 ? null : 2)}
                   className={`${
                     selectedDispositivo === 2 
@@ -1347,7 +1323,7 @@ export default function Home() {
                   } text-black px-4 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-2 text-sm sm:text-base min-h-[44px]`}
                 >
                   {selectedDispositivo === 2 && <Check className="w-4 h-4" />}
-                  Dispositivo 2 
+                  TerraSmart 2
                 </Button>
               </div>
 
@@ -1355,7 +1331,7 @@ export default function Home() {
               {(selectedDispositivo === 1 || selectedDispositivo === 2) && dispositivoSeleccionado && (
                 <div className="mt-6 sm:mt-8 bg-[#f5f5dc] rounded-lg p-4 sm:p-8">
                   <h3 className="text-center text-lg sm:text-xl mb-4 sm:mb-6">
-                    Sensores de {selectedDispositivo === 1 ? 'Dispositivo 1' : 'Dispositivo 2'}
+                    Sensores de {selectedDispositivo === 1 ? 'TerraSmart 1' : 'TerraSmart 2'}
                   </h3>
 
                   {loading && (
@@ -1514,9 +1490,9 @@ export default function Home() {
 
                     <p className="text-center mb-2 sm:mb-3 text-xs sm:text-sm text-gray-600 px-4">
                       {selectedDispositivo === 1 &&
-                        'Análisis basado en las mediciones actuales de tus sensores del dispositivo 1.'}
+                        'Análisis basado en las mediciones actuales de tus sensores de TerraSmart 1.'}
                       {selectedDispositivo === 2 &&
-                        'Análisis basado en las mediciones actuales de tus sensores del dispositivo 2.'}
+                        'Análisis basado en las mediciones actuales de tus sensores de TerraSmart 2.'}
                     </p>
 
                     <p className="text-center mb-6 sm:mb-8 text-base sm:text-lg px-4">
@@ -1703,8 +1679,8 @@ export default function Home() {
               {/* Recomendación 3 - Riego eficiente */}
               <div className="bg-[#f5f5dc] rounded-lg p-4 sm:p-6 flex gap-4">
                 <div className="flex-shrink-0">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Droplet className="w-6 h-6 sm:w-7 sm:h-7 text-blue-500" />
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#4a8db8]/40 flex items-center justify-center">
+                    <Droplet className="w-6 h-6 sm:w-7 sm:h-7 text-[#4a8db8]" />
                   </div>
                 </div>
                 <div className="flex-1">

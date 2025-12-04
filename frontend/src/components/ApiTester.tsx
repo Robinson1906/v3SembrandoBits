@@ -10,7 +10,6 @@ import {
   Send,
   Server,
   CheckCircle,
-  XCircle,
   Database
 } from "lucide-react";
 import { toast } from "sonner";
